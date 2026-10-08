@@ -1,12 +1,12 @@
 [Unit]
-Description=Telegram dismiss-button listener for job-autoresponder
+Description=Telegram dismiss-button listener for job-autofinder
 After=network-online.target
 
 [Service]
 User=bot
-WorkingDirectory=/home/bot/job-autoresponder
+WorkingDirectory=/home/bot/job-autofinder
 Environment=PYTHONUTF8=1
-ExecStart=/home/bot/job-autoresponder/.venv/bin/python -m jobbot.listener
+ExecStart=/home/bot/job-autofinder/.venv/bin/python -m jobbot.listener
 Restart=always
 RestartSec=5
 

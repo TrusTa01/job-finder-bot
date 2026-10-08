@@ -32,8 +32,8 @@ Use SSH keys and turn off password login in `/etc/ssh/sshd_config` (`PasswordAut
 
 ```bash
 su - bot
-git clone <your fork or copy of the repository> job-autoresponder
-cd job-autoresponder
+git clone <your fork or copy of the repository> job-autofinder
+cd job-autofinder
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
@@ -113,7 +113,7 @@ crontab -e
 ```
 
 ```
-*/15 * * * * /home/bot/job-autoresponder/deploy/run_pass.sh
+*/15 * * * * /home/bot/job-autofinder/deploy/run_pass.sh
 ```
 
 `deploy/run_pass.sh` runs every pass during the day (06:00-21:59 Moscow time) and only the first pass of each hour at night, adds a random delay of up to two minutes, and takes a lock so passes never overlap. Change the hours inside the script if your day differs. Output goes to `data/run.log`.
@@ -137,7 +137,7 @@ One small VPS can host several independent copies, for example for two people. E
 | | First copy | Second copy |
 |---|---|---|
 | Linux user | `bot` | `bot2` |
-| Code and data | `/home/bot/job-autoresponder` | `/home/bot2/job-autoresponder` |
+| Code and data | `/home/bot/job-autofinder` | `/home/bot2/job-autofinder` |
 | hh.ru session | `/home/bot/.config/hh-applicant-tool` | `/home/bot2/.config/hh-applicant-tool` |
 | `.env`, `config.yaml`, `data/profile.txt` | its own | its own |
 | Telegram | its own bot and chat id | its own bot (recommended) or the same bot with another chat id |
