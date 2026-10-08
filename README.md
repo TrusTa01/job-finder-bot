@@ -8,7 +8,7 @@ A personal job-search assistant. Every 15 minutes it looks for new vacancies, fi
 2. **Hard filter.** Stop-list for roles and keywords, seniority check. Salary never filters a vacancy out, it only sets priority.
 3. **LLM screening** (`fit`: yes / maybe / no, stack, required grade) and a **cover letter** of a few sentences built only from facts in the candidate profile. See `docs/model-choice.md` for the models and costs.
 4. **Telegram reports** with the vacancy, the verdict and the letter. Undelivered reports are resent on the next run.
-5. **Other sources.** Habr Career and GetMatch have cheap watchers (no LLM, link only). Public Telegram job channels (`jobbot/tgchannels.py`, channel list in the module) go through the same LLM screening as hh.ru, but the draft is a short personal message to the post's author instead of a cover letter, because there you write to a person.
+5. **Other sources.** Habr Career, GetMatch and public Telegram job channels (`jobbot/tgchannels.py`, channel list in the module) are checked every few hours with the same LLM screening and draft as hh.ru (`jobbot/candidates.py`). For Telegram channels the draft is a short personal message to the post's author instead of a cover letter, because there you write to a person.
 6. **Alerts** to the same chat when hh.ru is unreachable or the session expired, the model fails, the daily LLM budget is hit or the pass crashes; one daily heartbeat with statistics.
 
 ## Heads-up about hh.ru
@@ -30,7 +30,7 @@ On a server, run `deploy/run_pass.sh` from cron every 15 minutes. It adds a rand
 
 ## Layout
 
-- `jobbot/` is the bot: `run.py` (pipeline), `hh.py`, `filters.py`, `llm.py`, `store.py`, `notify.py`, `alerts.py`, `listener.py` (✕ button), `settings.py`, and the watchers `habr.py`, `getmatch.py`, `tgchannels.py`.
+- `jobbot/` is the bot: `run.py` (pipeline), `hh.py`, `filters.py`, `llm.py`, `store.py`, `notify.py`, `alerts.py`, `listener.py` (✕ button), `settings.py`, and the secondary sources `habr.py`, `getmatch.py`, `tgchannels.py` with their shared step `candidates.py`.
 - `deploy/` has the cron wrapper; `docs/deployment.md` is the step-by-step setup guide.
 - `tools/` holds one-off scripts: `scan` (preview matches), `collect_sample` and `llm_eval` (model tests). Run them as `python -m tools.scan`.
 - `data/` is local state (SQLite, caches, profile) and is never committed.

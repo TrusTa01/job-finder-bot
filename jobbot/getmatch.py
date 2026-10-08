@@ -1,12 +1,15 @@
-"""Cheap GetMatch watcher: its open API lists all offers, so we filter for Flutter locally.
+"""GetMatch watcher: its open API lists all offers, so we filter for Flutter locally.
 
-Runs every few hours, no LLM. A link is reported once; ids are stored with a "getmatch:" prefix.
+Runs every few hours; the LLM screens and drafts a letter only for the few offers that pass (see candidates.py).
+Ids are stored with a "getmatch:" prefix.
 """
+import html
+import re
 import time
 
 import requests
 
-from . import notify, store
+from . import candidates, store
 
 URL = "https://getmatch.ru/api/offers"
 PAGE = 100
@@ -56,36 +59,41 @@ def fetch() -> list[dict]:
     return offers
 
 
+def _description(o: dict) -> str:
+    raw = " ".join(str(o.get(k) or "") for k in ("description_html", "offer_description"))
+    return html.unescape(re.sub(r"<[^>]+>", " ", raw))
+
+
 def check(db, send: bool = True) -> int:
-    """Report new relevant offers. Returns how many were reported."""
+    """Screen new relevant offers, draft a letter for each fitting one and report it. Returns how many were reported."""
     now = int(time.time())
     if now - int(store.get_meta(db, "getmatch_last_check", "0")) < CHECK_EVERY_SECONDS:
         return 0
     store.set_meta(db, "getmatch_last_check", str(now))
 
     known = store.known_ids(db)
+    fresh = [o for o in fetch() if f"getmatch:{o['id']}" not in known and _relevant(o)]
+    profile = candidates.load_profile()
+    if not send or not profile:
+        return len(fresh) if not send else 0  # the preview mode never calls the LLM
     reported = 0
-    for o in fetch():
-        key = f"getmatch:{o['id']}"
-        if key in known or not _relevant(o):
-            continue
+    for o in fresh:
         company = (o.get("company") or {}).get("name", "")
         formats = sorted({i.get("format", "") for i in o.get("location_items") or [] if isinstance(i, dict)} - {""})
         fmt = {"remote": "удалённо", "hybrid": "гибрид", "office": "офис"}
         where = ", ".join(fmt.get(f, f) for f in formats) or "формат не указан"
         lo, hi = o.get("salary_display_from"), o.get("salary_display_to")
         salary = f"{lo or ''}–{hi or ''} {o.get('salary_currency') or ''}".strip(" –") if (lo or hi) else "зарплата не указана"
-        url = "https://getmatch.ru" + (o.get("url") or "")
         entry = {
-            "id": key, "published_at": o.get("published_at"), "name": o.get("position"), "employer": {"name": company},
-            "area": {"name": where}, "experience": {"name": ""}, "alternate_url": url,
+            "id": f"getmatch:{o['id']}", "published_at": o.get("published_at"), "name": o.get("position"),
+            "employer": {"name": company}, "area": {"name": where}, "experience": {"name": ""},
+            "alternate_url": "https://getmatch.ru" + (o.get("url") or ""),
         }
-        text = f"GetMatch, новая вакансия: {o.get('position')}\n{company} · {where} · {salary}\n{url}"
-        if send and notify.send(text, key):
-            store.save_vacancy(db, entry, "notified")
-            reported += 1
-        elif not send:
-            reported += 1
+        description = f"Зарплата: {salary}. " + _description(o)
+        result = candidates.handle(db, profile, entry, description)
+        if result == candidates.BUDGET:
+            break
+        reported += result == candidates.SENT
         if reported >= MAX_PER_RUN:
             break
     return reported

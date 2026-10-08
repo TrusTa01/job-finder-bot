@@ -1,13 +1,15 @@
-"""Cheap Habr Career watcher: one request every few hours, no LLM.
-
-Habr currently has almost no Flutter vacancies, so this only reports a link when one appears.
-A vacancy is reported once; ids are stored with a "habr:" prefix next to the hh ones.
+"""Habr Career watcher: one search every few hours. Habr rarely has Flutter vacancies, so the LLM
+screens and drafts a letter only for the few that appear (see candidates.py).
+Ids are stored with a "habr:" prefix next to the hh ones.
 """
+import html
+import json
+import re
 import time
 
 import requests
 
-from . import notify, store
+from . import candidates, store
 
 URL = "https://career.habr.com/api/frontend/vacancies"
 QUERY = {"q": "Flutter", "type": "all", "sort": "date", "per_page": 50}
@@ -30,33 +32,46 @@ def fetch() -> list[dict]:
         return []
 
 
+def _description(href: str, fallback: str) -> str:
+    """Vacancy text from the JSON-LD block of the vacancy page; the skills line when the page cannot be read."""
+    try:
+        page = requests.get("https://career.habr.com" + href, headers={"User-Agent": "Mozilla/5.0"}, timeout=30).text
+        start = page.find(">", page.find("application/ld+json")) + 1
+        data = json.loads(page[start : page.find("</script>", start)])
+        text = html.unescape(re.sub(r"<[^>]+>", " ", data.get("description", "")))
+    except (requests.RequestException, ValueError):
+        text = ""
+    return text or fallback
+
+
 def check(db, send: bool = True) -> int:
-    """Report new relevant vacancies. Returns how many were reported."""
+    """Screen new relevant vacancies, draft a letter for each fitting one and report it. Returns how many were reported."""
     now = int(time.time())
     if now - int(store.get_meta(db, "habr_last_check", "0")) < CHECK_EVERY_SECONDS:
         return 0
     store.set_meta(db, "habr_last_check", str(now))
 
     known = store.known_ids(db)
+    fresh = [v for v in fetch() if f"habr:{v['id']}" not in known and _relevant(v)]
+    profile = candidates.load_profile()
+    if not send or not profile:
+        return len(fresh) if not send else 0  # the preview mode never calls the LLM
     reported = 0
-    for v in fetch():
-        key = f"habr:{v['id']}"
-        if key in known or not _relevant(v):
-            continue
+    for v in fresh:
         company = (v.get("company") or {}).get("title", "")
         salary = (v.get("salary") or {}).get("formatted") or "зарплата не указана"
         mode = "удалённо" if v.get("remoteWork") else "офис или гибрид"
-        url = "https://career.habr.com" + v.get("href", "")
+        skills = ", ".join(s.get("title", "") for s in v.get("skills") or [])
         entry = {
-            "id": key, "published_at": None, "name": v.get("title"), "employer": {"name": company},
-            "area": {"name": mode}, "experience": {"name": ""}, "alternate_url": url,
+            "id": f"habr:{v['id']}", "published_at": None, "name": v.get("title"), "employer": {"name": company},
+            "area": {"name": mode}, "experience": {"name": (v.get("qualification") or {}).get("title", "")},
+            "alternate_url": "https://career.habr.com" + v.get("href", ""),
         }
-        text = f"Хабр Карьера, новая вакансия: {v.get('title')}\n{company} · {mode} · {salary}\n{url}"
-        if send and notify.send(text, key):
-            store.save_vacancy(db, entry, "notified")
-            reported += 1
-        elif not send:
-            reported += 1
+        description = _description(v.get("href", ""), f"Навыки: {skills}. {salary}.")
+        result = candidates.handle(db, profile, entry, description)
+        if result == candidates.BUDGET:
+            break
+        reported += result == candidates.SENT
         if reported >= MAX_PER_RUN:
             break
     return reported
