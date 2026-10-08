@@ -37,4 +37,4 @@ On a server, run `deploy/run_pass.sh` from cron every 15 minutes. It adds a rand
 
 ## Secrets
 
-Tokens, keys and configs with personal data are not committed (see `.gitignore`). Examples live in `.env.example` and `config.example.yaml`. A local pre-commit hook runs [gitleaks](https://github.com/gitleaks/gitleaks) on staged changes (`winget install Gitleaks.Gitleaks`).
+Tokens, keys and configs with personal data are not committed (see `.gitignore`). Examples live in `.env.example` and `config.example.yaml`. [gitleaks](https://github.com/gitleaks/gitleaks) scans every push on GitHub (`.github/workflows/gitleaks.yml`), and a local pre-commit hook can do the same before each commit (`winget install Gitleaks.Gitleaks`).
