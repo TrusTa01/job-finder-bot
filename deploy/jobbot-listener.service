@@ -1,0 +1,14 @@
+[Unit]
+Description=Telegram dismiss-button listener for job-autoresponder
+After=network-online.target
+
+[Service]
+User=bot
+WorkingDirectory=/home/bot/job-autoresponder
+Environment=PYTHONUTF8=1
+ExecStart=/home/bot/job-autoresponder/.venv/bin/python -m jobbot.listener
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

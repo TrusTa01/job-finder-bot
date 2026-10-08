@@ -7,6 +7,7 @@ from . import settings
 
 API = "https://api.telegram.org/bot{token}/{method}"
 LIMIT = 4000  # Telegram caps a message at 4096 characters
+DISMISS = {"inline_keyboard": [[{"text": "✕", "callback_data": "dismiss"}]]}  # handled by listener.py
 
 
 def send(text: str) -> bool:
@@ -20,7 +21,7 @@ def send(text: str) -> bool:
             try:
                 r = requests.post(
                     API.format(token=token, method="sendMessage"),
-                    json={"chat_id": chat, "text": chunk, "disable_web_page_preview": True},
+                    json={"chat_id": chat, "text": chunk, "disable_web_page_preview": True, "reply_markup": DISMISS},
                     proxies=proxies,
                     timeout=30,
                 )

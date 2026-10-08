@@ -118,6 +118,41 @@ crontab -e
 
 `deploy/run_pass.sh` runs every pass during the day (06:00-21:59 Moscow time) and only the first pass of each hour at night, adds a random delay of up to two minutes, and takes a lock so passes never overlap. Change the hours inside the script if your day differs. Output goes to `data/run.log`.
 
+## 8. The ✕ button (optional, recommended)
+
+Every message carries a ✕ button that deletes it. A small service listens for button presses (long polling, about 30 MB of memory). Install it as root, after editing `User=` and the two paths in `deploy/jobbot-listener.service` for your Linux user:
+
+```bash
+cp deploy/jobbot-listener.service /etc/systemd/system/
+systemctl daemon-reload && systemctl enable --now jobbot-listener
+systemctl status jobbot-listener
+```
+
+Only presses from the chat in `TELEGRAM_CHAT_ID` are honoured. Telegram refuses to delete messages older than 48 hours; for those the text is replaced by "✕ убрано". One bot token can be read by only one process (`getUpdates`), so every copy of the bot needs its own Telegram bot and its own listener service (`jobbot-listener2` and so on).
+
+## Running a second copy on the same server
+
+One small VPS can host several independent copies, for example for two people. Each copy has its own Linux user, so sessions, keys, databases and cron jobs never mix.
+
+| | First copy | Second copy |
+|---|---|---|
+| Linux user | `bot` | `bot2` |
+| Code and data | `/home/bot/job-autoresponder` | `/home/bot2/job-autoresponder` |
+| hh.ru session | `/home/bot/.config/hh-applicant-tool` | `/home/bot2/.config/hh-applicant-tool` |
+| `.env`, `config.yaml`, `data/profile.txt` | its own | its own |
+| Telegram | its own bot and chat id | its own bot (recommended) or the same bot with another chat id |
+| cron | its own line | its own line |
+
+Steps: repeat sections 1-7 for the new user (create `bot2` in section 1, copy the code into its home, run the hh.ru login on the second person's own computer and copy the session to `bot2`, fill in a separate `.env`, `config.yaml` and `profile.txt`, add its own cron line). The lock file lives inside each project folder (`data/run.lock`), so the copies do not block each other, and the random start delay spreads their passes.
+
+Shared safely: the Telegram proxy, the server, the code. For the LLM, either use one DeepSeek key or create a second key on the same account and give each copy its own `daily_llm_budget_usd`, so the costs stay separate. Code updates must be copied to each copy.
+
+Things to know:
+- **The profile must be written from the second person's real skills and approved by them.** The letter writer uses only what is in `profile.txt`; invented facts end up in letters sent under their name.
+- **The prompts in `jobbot/llm.py` are written for one profession and stack.** For another field, rewrite `SCREEN_SYSTEM` and `LETTER_SYSTEM` and the queries in `config.yaml`.
+- **Both hh.ru accounts read from the same server IP.** That is a small extra signal for hh.ru. The bot only reads and makes a few dozen requests per pass, so the risk is low, but if it matters, put the second copy on its own server.
+- **Each person accepts the risk for their own hh.ru account** (see the risk note at the top).
+
 ## What you will receive
 
 - A message per suitable hh.ru vacancy: title, company, link, verdict, and a draft cover letter.
