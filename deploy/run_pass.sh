@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cron entry point (every 6 minutes). Decides whether to run now, adds jitter, prevents overlap.
+# Cron entry point (cron runs it every 15 minutes). Decides whether to run now, adds jitter, prevents overlap.
 # Day (06:00-21:59 Moscow): every run. Night: only the first run of each hour.
 set -u
 cd "$(dirname "$0")/.."

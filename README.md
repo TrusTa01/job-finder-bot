@@ -31,7 +31,7 @@ On a server, run `deploy/run_pass.sh` from cron every 15 minutes. It adds a rand
 ## Layout
 
 - `jobbot/` is the bot: `run.py` (pipeline), `hh.py`, `filters.py`, `llm.py`, `store.py`, `notify.py`, `alerts.py`, `settings.py`, and the watchers `habr.py`, `getmatch.py`, `tgchannels.py`.
-- `deploy/` has the cron wrapper.
+- `deploy/` has the cron wrapper; `docs/deployment.md` is the step-by-step setup guide.
 - `tools/` holds one-off scripts: `scan` (preview matches), `collect_sample` and `llm_eval` (model tests). Run them as `python -m tools.scan`.
 - `data/` is local state (SQLite, caches, profile) and is never committed.
 
