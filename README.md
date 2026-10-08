@@ -1,4 +1,4 @@
-# job-autoresponder
+# job-autofinder
 
 A personal job-search assistant. Every 15 minutes it looks for new vacancies, filters them, has an LLM screen each one and draft a short cover letter, and sends a report with the link to Telegram. Applications are sent by hand: the bot only prepares them.
 
