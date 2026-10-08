@@ -4,13 +4,21 @@ import time
 import requests
 
 from . import settings
+from .filters import resume_checklist
 
 API = "https://api.telegram.org/bot{token}/{method}"
 LIMIT = 4000  # Telegram caps a message at 4096 characters
 DISMISS = {"inline_keyboard": [[{"text": "✕", "callback_data": "dismiss"}]]}  # handled by listener.py
 
 
-def send(text: str) -> bool:
+def _keyboard(vacancy_id: str | None) -> dict:
+    """✕ always; ✅ (applied) only for vacancies. callback_data is capped at 64 bytes by Telegram."""
+    if not vacancy_id or len(f"applied:{vacancy_id}".encode()) > 64:
+        return DISMISS
+    return {"inline_keyboard": [[{"text": "✅ Откликнулся", "callback_data": f"applied:{vacancy_id}"}, *DISMISS["inline_keyboard"][0]]]}
+
+
+def send(text: str, vacancy_id: str | None = None) -> bool:
     """Send plain text. Returns True on success. Never logs the URL (it contains the bot token)."""
     token, chat = settings.get("TELEGRAM_BOT_TOKEN"), settings.get("TELEGRAM_CHAT_ID")
     proxy = settings.telegram_proxy()
@@ -21,7 +29,7 @@ def send(text: str) -> bool:
             try:
                 r = requests.post(
                     API.format(token=token, method="sendMessage"),
-                    json={"chat_id": chat, "text": chunk, "disable_web_page_preview": True, "reply_markup": DISMISS},
+                    json={"chat_id": chat, "text": chunk, "disable_web_page_preview": True, "reply_markup": _keyboard(vacancy_id)},
                     proxies=proxies,
                     timeout=30,
                 )
@@ -58,4 +66,4 @@ def format_vacancy(row) -> str:
     if row["letter"]:
         lines += ["", "Письмо:", row["letter"]]
     lines += ["", row["url"]]
-    return "\n".join(lines)
+    return "\n".join(lines) + resume_checklist(row)

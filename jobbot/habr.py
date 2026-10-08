@@ -52,7 +52,7 @@ def check(db, send: bool = True) -> int:
             "area": {"name": mode}, "experience": {"name": ""}, "alternate_url": url,
         }
         text = f"Хабр Карьера, новая вакансия: {v.get('title')}\n{company} · {mode} · {salary}\n{url}"
-        if send and notify.send(text):
+        if send and notify.send(text, key):
             store.save_vacancy(db, entry, "notified")
             reported += 1
         elif not send:

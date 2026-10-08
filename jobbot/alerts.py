@@ -42,7 +42,7 @@ def heartbeat(db) -> None:
         return
     s = store.day_stats(db)
     text = (
-        f"Бот работает. За сутки: новых вакансий {s['seen']}, отправлено вам {s['sent']}, "
+        f"Бот работает. За сутки: новых вакансий {s['seen']}, отправлено вам {s['sent']}, откликов {s['applied']}, "
         f"расходы на ИИ ${s['spend']:.3f}."
     )
     if s["undelivered"]:

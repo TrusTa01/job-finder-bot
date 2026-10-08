@@ -87,7 +87,7 @@ def check(db, send: bool = True) -> int:
                 "id": key, "published_at": p["date"], "name": lines[0][:100] if lines else "", "employer": {"name": channel},
                 "area": {"name": ""}, "experience": {"name": ""}, "alternate_url": url,
             }
-            if send and notify.send(f"Telegram @{channel}, новая вакансия:\n{snippet}\n{url}"):
+            if send and notify.send(f"Telegram @{channel}, новая вакансия:\n{snippet}\n{url}", key):
                 store.save_vacancy(db, entry, "notified")
                 reported += 1
             elif not send:

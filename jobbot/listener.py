@@ -1,4 +1,4 @@
-"""Deletes a Telegram message when its ✕ button is pressed. Runs as a service: python -m jobbot.listener
+"""Handles the buttons under the bot's messages: ✕ deletes the message, ✅ marks the vacancy as applied. Runs as a service: python -m jobbot.listener
 
 Long polling through the same proxy as notify.py. Only presses from the configured chat are honoured.
 If Telegram refuses to delete (messages older than 48 hours), the text is replaced by a short stub.
@@ -7,8 +7,8 @@ import time
 
 import requests
 
-from . import settings
-from .notify import API
+from . import settings, store
+from .notify import API, DISMISS
 
 
 def _call(method: str, payload: dict, timeout: int = 30) -> dict:
@@ -22,11 +22,19 @@ def _handle(callback: dict, chat: str) -> None:
     message = callback.get("message") or {}
     chat_id = (message.get("chat") or {}).get("id")
     _call("answerCallbackQuery", {"callback_query_id": callback["id"]})
-    if str(chat_id) != chat or callback.get("data") != "dismiss":
+    data = callback.get("data") or ""
+    if str(chat_id) != chat:
         return
     target = {"chat_id": chat_id, "message_id": message["message_id"]}
-    if not _call("deleteMessage", target).get("ok"):
-        _call("editMessageText", {**target, "text": "✕ убрано"})
+    if data == "dismiss":
+        if not _call("deleteMessage", target).get("ok"):
+            _call("editMessageText", {**target, "text": "✕ убрано"})
+    elif data.startswith("applied:"):
+        store.mark_applied(store.connect(), data[len("applied:"):])
+        text = message.get("text") or ""
+        if not text.startswith("✅"):
+            _call("editMessageText", {**target, "text": "✅ ОТКЛИКНУЛСЯ" + "\n" + text,
+                                       "disable_web_page_preview": True, "reply_markup": DISMISS})
 
 
 def run() -> None:

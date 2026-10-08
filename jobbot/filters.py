@@ -77,3 +77,17 @@ def evaluate(vacancy: dict, description: str | None = None) -> Verdict:
         low = True
     reason = "devops" if devops else ("signal in description" if not title_match else "")
     return Verdict(False, "low" if low else "normal", reason)
+
+
+def resume_checklist(row) -> str:
+    """Which of the configured resumes fit this vacancy (config key `resumes`); empty when not configured."""
+    resumes = CFG.get("resumes") or []
+    title = (row["name"] or "").lower()
+    lines = []
+    for r in resumes:
+        fits = row["stack"] in r.get("stacks", []) or any(w in title for w in r.get("title_any", []))
+        lines.append(f"{'✓' if fits else '✗'} {r['name']}")
+    ok = [l for l in lines if l.startswith("✓")]
+    if not ok:
+        return ""
+    return "\n".join(["", "Резюме для отклика:", *lines])

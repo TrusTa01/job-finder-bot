@@ -29,11 +29,12 @@ def connect() -> sqlite3.Connection:
     db = sqlite3.connect(DB_PATH)
     db.row_factory = sqlite3.Row
     db.executescript(SCHEMA)
-    try:  # migration for databases created before this column existed
-        db.execute("ALTER TABLE vacancies ADD COLUMN stack TEXT")
-        db.commit()
-    except sqlite3.OperationalError:
-        pass
+    for column in ("stack TEXT", "applied_at INTEGER"):  # migrations for databases created before these columns
+        try:
+            db.execute(f"ALTER TABLE vacancies ADD COLUMN {column}")
+            db.commit()
+        except sqlite3.OperationalError:
+            pass
     return db
 
 
@@ -71,6 +72,11 @@ def mark_notified(db: sqlite3.Connection, vacancy_id: str) -> None:
     db.commit()
 
 
+def mark_applied(db: sqlite3.Connection, vacancy_id: str) -> None:
+    db.execute("UPDATE vacancies SET applied_at=? WHERE id=? AND applied_at IS NULL", (int(time.time()), vacancy_id))
+    db.commit()
+
+
 def log_usage(db: sqlite3.Connection, task: str, model: str, effort: str, t_in: int, t_out: int, cost: float) -> None:
     db.execute("INSERT INTO llm_usage VALUES (?,?,?,?,?,?,?)", (int(time.time()), task, model, effort, t_in, t_out, cost))
     db.commit()
@@ -102,6 +108,7 @@ def day_stats(db: sqlite3.Connection) -> dict:
     return {
         "seen": count("1=1"),
         "sent": count("status='notified'"),
+        "applied": db.execute("SELECT COUNT(*) FROM vacancies WHERE applied_at>=?", (since,)).fetchone()[0],
         "undelivered": db.execute("SELECT COUNT(*) FROM vacancies WHERE status='ready'").fetchone()[0],
         "spend": db.execute("SELECT COALESCE(SUM(cost_usd),0) FROM llm_usage WHERE ts>=?", (since,)).fetchone()[0],
     }
