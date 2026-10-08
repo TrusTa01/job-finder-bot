@@ -1,0 +1,64 @@
+# ------- Python -------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# ------- IDE -------
+.idea/
+*.iml
+*.iws
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# ------- AI & tooling -------
+.cursor/
+.claude/scheduled_tasks.lock
+.claude/settings.local.json
+.superpowers/
+.claude-flow/
+claude-flow.config.json
+.mcp.json
+graphify-out/
+
+# ------- OS -------
+.DS_Store
+Thumbs.db
+
+# ------- Secrets -------
+.env
+.env.*
+!.env.example
+!**/*.example
+*.pem
+*.key
+config.json
+tokens.json
+cookies*.json
+storage_state.json
+secrets/
+
+# ------- Logs -------
+*.log
+logs/
+
+# ------- Local data -------
+data/
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+
+# ------- Other -------
+scripts/**/*.local.*
