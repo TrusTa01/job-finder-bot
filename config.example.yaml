@@ -1,0 +1,54 @@
+# Example search config. Copy to config.yaml (gitignored) and edit for your own search.
+# Principle: cut only the clearly unsuitable, rank the rest by priority.
+
+search:
+  period_days: 30            # lookback window for the first scan
+  per_page: 100
+  queries:
+    # field: name = search in the vacancy title, field: all = full text
+    - { text: "Backend developer",  field: name }
+    - { text: "Python разработчик", field: name }
+    - { text: "Python",             field: all }
+
+# Only vacancies whose work_format contains this value are kept (REMOTE | HYBRID | ON_SITE)
+required_work_format: REMOTE
+
+salary:
+  filter: false                      # true would hide low salaries; by default salary only sets priority
+  normal_priority_from_rub: 100000   # net; lower or missing -> low priority
+
+seniority:
+  # Titles containing these are skipped, unless they also contain an "ok" marker
+  skip: ["senior", "lead", "head of", "principal", "staff", "тимлид", "ведущий"]
+  ok_markers: ["middle", "junior", "джун", "trainee", "стажер"]
+
+# A title containing any of these is relevant right away
+title_signals: ["python"]
+
+# For titles without a signal: kept only if the full description contains one of these
+description_signals: ["python", "django", "fastapi"]
+
+stop_roles_keywords:
+  # Skipped when present in a title that has no title signal
+  - qa
+  - тестировщик
+  - аналитик
+  - дизайнер
+  - менеджер
+
+stop_text_keywords:
+  # Skipped when found in the title or description
+  - только вёрстка
+  - pixel perfect
+
+low_priority_keywords:
+  # Kept, but with low priority
+  - стажер
+  - intern
+  - подработка
+  - частичная занятость
+
+limits:
+  daily_llm_budget_usd: 0.25         # stop LLM calls and alert when the last 24 hours cost this much
+  max_applies_per_day: 30
+  mode: draft_only                   # draft_only | auto

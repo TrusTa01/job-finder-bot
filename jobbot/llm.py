@@ -1,0 +1,110 @@
+"""DeepSeek calls: screening (cheap, no thinking) and cover letters (low thinking).
+
+See docs/model-choice.md for why these models and settings were chosen.
+"""
+import json
+import time
+
+import requests
+
+from . import settings
+
+URL = "https://api.deepseek.com/chat/completions"
+SCREEN_MODEL, SCREEN_EFFORT = "deepseek-flash", "none"
+LETTER_MODEL, LETTER_EFFORT = "deepseek-flash", "low"
+
+# USD per 1M tokens at peak rates: (input cache miss, input cache hit, output)
+PRICES = {"deepseek-flash": (0.30, 0.006, 1.20), "deepseek-v4-pro": (1.32, 0.044, 3.96)}
+
+SCREEN_SYSTEM = """Ты помощник по поиску работы. Тебе дают профиль кандидата и текст вакансии. Верни JSON:
+{
+ "fit": "yes" | "maybe" | "no",
+ "stack": "flutter" | "devops" | "other",
+ "reason": "1-2 предложения по-русски: почему",
+ "required_grade": "junior" | "middle" | "senior" | "unknown",
+ "location_or_schedule_issue": "кратко, если есть ограничение по стране, резидентству или рабочему времени по Москве, иначе пустая строка"
+}
+Поле stack: "flutter" если основной стек Flutter/Dart (в том числе full-stack, когда вместе с Flutter нужен бэкенд на Dart, Supabase, Firebase, Node и т.п.); "devops" если это DevOps, системное администрирование или инфраструктура; "other" всё остальное: нативный Android/iOS, React Native, Kotlin, backend без Flutter, frontend, продажи, дизайн, QA, аналитика и т.д., даже если Flutter упомянут вскользь или в описании компании.
+Правила оценки:
+- "no": stack = "other".
+- stack = "flutter": "yes", если требования реалистичны для кандидата; "maybe", если требования заметно выше опыта (годы, опубликованные приложения и т.п.) или есть сомнения. Нехватка отдельных навыков или лет опыта НЕ повод ставить "no": всё можно доучить.
+- stack = "devops": подходят только вакансии базового уровня: Linux, Docker, CI/CD (GitHub Actions, GitLab CI), Ansible, Nginx, мониторинг, сети, VPN, PostgreSQL, сопровождение серверов. Ставь "maybe", если требуется именно это. Ставь "no", если в ОБЯЗАТЕЛЬНЫХ требованиях Kubernetes, Terraform, облака (AWS, Azure, GCP), OpenShift, Ceph или у кандидата явно не хватит опыта (например, нужен сеньор или несколько лет на всех перечисленных технологиях). Если эти технологии указаны только как «плюс» или «будет плюсом», это не повод для "no".
+Верни только JSON."""
+
+LETTER_SYSTEM = """Ты пишешь сопроводительные письма для отклика на вакансию на hh.ru от имени соискателя. Верни JSON {"letter": "..."}.
+Требования к письму:
+- КОРОТКО: приветствие плюс 3-4 предложения, не больше 500 символов. Рекрутёр читает письмо секунд десять. Не перечисляй стек списком: назови максимум три самые важные технологии или факта.
+- Письмо начинается с приветствия отдельной строкой: «Здравствуйте!». Затем вторая строка с одной короткой фразой о интересе к вакансии, например «Заинтересовала вакансия Flutter-разработчика в вашей компании» (названия компании в тексте нет, если она не указана в данных; формулируй по-разному, без шаблонной вежливости). И только потом переходи к сути: что из опыта кандидата совпадает с требованиями вакансии. Не начинай сразу с рассказа о себе.
+- По-русски, на «вы», живо и конкретно. Не используй «Мой опыт напрямую пересекается».
+- Используй только факты из профиля. Выбери ОДИН-ДВА пункта, которые реально совпадают с главными требованиями вакансии.
+- Не называй сроки опыта числами (ни годы, ни месяцы).
+- Не путай проекты: коммерческая работа и личные проекты из профиля это разное, не приписывай технологии одного проекта другому.
+- Не утверждай, что кандидат владеет инструментом или технологией, которых нет в профиле (например, Figma), даже если вакансия их требует.
+- Если в вакансии есть важное требование, которого у кандидата нет, упомяни это ОДНИМ коротким честным предложением в духе «X пока не был основной задачей, но готов быстро освоить». Не больше одного такого пробела.
+- Если вакансия про DevOps или инфраструктуру: опирайся на реальный инфраструктурный опыт из профиля (self-hosted серверы, Docker, CI/CD, мониторинг, VPN, Nginx), не называй себя DevOps-инженером с годами опыта. Если нужен Kubernetes или облака, скажи одним предложением, что это пока не делал, но готов освоить.
+- Если вакансия full-stack (Flutter и бэкенд): сделай упор на связку приложение + бэкенд из профиля.
+- Если ниже стоит «УПОМЯНИ ЧАСОВОЙ ПОЯС: да», добавь одну короткую фразу ровно с такими фактами: кандидат в своём часовом поясе, на связи с 07:00 до 16:00 по МСК. Не придумывай другие часы и не пересчитывай их. Если стоит «нет», про часовой пояс не пиши вообще.
+- Не обещай гибкость графика, готовность переехать или любые условия, которых нет в профиле.
+- Пиши обычным разговорным языком, без канцелярских конструкций вроде «Ключевые для вакансии X — в Y». Упоминай WebSocket, GraphQL и подобное только если это есть в профиле.
+- Заверши одной короткой фразой без шаблонов («Буду рад обсудить» достаточно).
+- Без markdown, эмодзи, плейсхолдеров и лести. Верни только JSON."""
+
+
+def _post(model: str, effort: str, system: str, user: str) -> tuple[dict, dict]:
+    body = {
+        "model": model,
+        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        "response_format": {"type": "json_object"},
+        "reasoning_effort": effort,
+        "max_tokens": 4000,
+    }
+    if effort == "none":
+        body["temperature"] = 0.2
+    headers = {"Authorization": f"Bearer {settings.get('DEEPSEEK_API_KEY')}"}
+    last = "unknown"
+    for attempt in range(3):
+        try:
+            r = requests.post(URL, json=body, headers=headers, timeout=180)
+            if r.status_code == 200:
+                data = r.json()
+                return json.loads(data["choices"][0]["message"]["content"]), data.get("usage", {})
+            last = f"HTTP {r.status_code}"
+        except (requests.RequestException, json.JSONDecodeError, KeyError) as e:
+            last = type(e).__name__
+        time.sleep(2 * (attempt + 1))
+    raise RuntimeError(f"LLM call failed after retries: {last}")
+
+
+def _cost(model: str, usage: dict) -> tuple[int, int, float]:
+    p_miss, p_hit, p_out = PRICES[model]
+    hit = usage.get("prompt_cache_hit_tokens", 0)
+    miss = usage.get("prompt_cache_miss_tokens", usage.get("prompt_tokens", 0) - hit)
+    out = usage.get("completion_tokens", 0)
+    return hit + miss, out, (miss * p_miss + hit * p_hit + out * p_out) / 1e6
+
+
+def _vacancy_text(v: dict, description: str) -> str:
+    salary = v.get("salary")
+    return (
+        f"Название: {v.get('name')}\nКомпания: {(v.get('employer') or {}).get('name', '')}\n"
+        f"Город: {(v.get('area') or {}).get('name', '')}\n"
+        f"Формат: {', '.join(f['id'] for f in v.get('work_format') or [])}\n"
+        f"Опыт по hh: {(v.get('experience') or {}).get('name', '')}\n"
+        f"Зарплата: {salary if salary else 'не указана'}\n"
+        f"Описание: {' '.join(description.split())[:3500]}"
+    )
+
+
+def screen(profile: str, v: dict, description: str) -> tuple[dict, tuple]:
+    user = f"ПРОФИЛЬ КАНДИДАТА:\n{profile}\n\nВАКАНСИЯ:\n{_vacancy_text(v, description)}"
+    out, usage = _post(SCREEN_MODEL, SCREEN_EFFORT, SCREEN_SYSTEM, user)
+    return out, ("screen", SCREEN_MODEL, SCREEN_EFFORT, *_cost(SCREEN_MODEL, usage))
+
+
+def write_letter(profile: str, v: dict, description: str, issue: str) -> tuple[str, tuple]:
+    user = (
+        f"ПРОФИЛЬ КАНДИДАТА:\n{profile}\n\nВАКАНСИЯ:\n{_vacancy_text(v, description)}\n\n"
+        f"УПОМЯНИ ЧАСОВОЙ ПОЯС: {'да' if issue else 'нет'}"
+    )
+    out, usage = _post(LETTER_MODEL, LETTER_EFFORT, LETTER_SYSTEM, user)
+    return str(out.get("letter", "")).strip(), ("letter", LETTER_MODEL, LETTER_EFFORT, *_cost(LETTER_MODEL, usage))
