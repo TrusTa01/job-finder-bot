@@ -8,7 +8,7 @@ A personal job-search assistant. Every 15 minutes it looks for new vacancies, fi
 2. **Hard filter.** Stop-list for roles and keywords, seniority check. Salary never filters a vacancy out, it only sets priority.
 3. **LLM screening** (`fit`: yes / maybe / no, stack, required grade) and a **cover letter** of a few sentences built only from facts in the candidate profile. See `docs/model-choice.md` for the models and costs.
 4. **Telegram reports** with the vacancy, the verdict and the letter. Undelivered reports are resent on the next run.
-5. **Cheap watchers** (no LLM, link only) for sources that rarely have matching vacancies: Habr Career, GetMatch and public Telegram job channels (`jobbot/tgchannels.py`, channel list in the module).
+5. **Other sources.** Habr Career and GetMatch have cheap watchers (no LLM, link only). Public Telegram job channels (`jobbot/tgchannels.py`, channel list in the module) go through the same LLM screening as hh.ru, but the draft is a short personal message to the post's author instead of a cover letter, because there you write to a person.
 6. **Alerts** to the same chat when hh.ru is unreachable or the session expired, the model fails, the daily LLM budget is hit or the pass crashes; one daily heartbeat with statistics.
 
 ## Heads-up about hh.ru

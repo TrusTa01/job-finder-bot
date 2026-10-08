@@ -156,7 +156,8 @@ Things to know:
 ## What you will receive
 
 - A message per suitable hh.ru vacancy: title, company, link, verdict, and a draft cover letter.
-- Links from the cheap watchers (Habr Career, GetMatch, public Telegram channels listed in `jobbot/tgchannels.py`). Edit `CHANNELS` there to follow other channels.
+- Links from the cheap watchers (Habr Career, GetMatch).
+- Posts from the public Telegram channels listed in `jobbot/tgchannels.py` (edit `CHANNELS` there to follow others): screened by the LLM, with a draft personal message to the post's author. Prompt: `DM_SYSTEM` in `jobbot/llm.py`.
 - Alerts: hh.ru unreachable or session expired, vacancy descriptions not loading, model failing, daily budget hit, crash. The same problem is reported at most every six hours.
 - One heartbeat message a day after 09:00 Moscow time with the previous day's numbers.
 

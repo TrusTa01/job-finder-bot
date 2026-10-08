@@ -52,7 +52,22 @@ def send(text: str, vacancy_id: str | None = None) -> bool:
     return True
 
 
+def format_telegram_post(row) -> str:
+    stack = {"flutter": "Flutter", "devops": "DevOps / инфраструктура"}.get(row["stack"], "")
+    lines = [
+        f"Telegram @{row['employer']}: {row['name']}",
+        f"Оценка: {row['fit']}" + (f" · стек: {stack}" if stack else ""),
+        f"{row['reason']}",
+    ]
+    if row["issue"]:
+        lines.append(f"Внимание: {row['issue']}")
+    lines += ["", f"Пост: {row['snippet']}", "", "Сообщение автору (отправьте в личные или по контактам из поста):", row["letter"], "", row["url"]]
+    return "\n".join(lines) + resume_checklist(row)
+
+
 def format_vacancy(row) -> str:
+    if str(row["id"]).startswith("tg:"):
+        return format_telegram_post(row)
     priority = "приоритет обычный" if row["priority"] == "normal" else "приоритет низкий"
     stack = {"flutter": "Flutter", "devops": "DevOps / инфраструктура"}.get(row["stack"], "")
     lines = [
