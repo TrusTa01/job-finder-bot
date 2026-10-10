@@ -61,6 +61,10 @@ def main() -> None:
     print(f"drafts to rebuild: {len(rows)}")
     if args.dry_run:
         return
+    if not rows:
+        if not args.ids:
+            notify.send("Нечего пересобирать: все вакансии отмечены ✅ или убраны ✕.")
+        return
 
     cache = hh.load_cache()
     done = failed = 0
