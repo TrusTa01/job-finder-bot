@@ -8,6 +8,7 @@ import time
 import requests
 
 from . import settings
+from .filters import CFG
 
 URL = "https://api.deepseek.com/chat/completions"
 SCREEN_MODEL, SCREEN_EFFORT = "deepseek-flash", "none"
@@ -120,8 +121,15 @@ def screen(profile: str, v: dict, description: str) -> tuple[dict, tuple]:
     return out, ("screen", SCREEN_MODEL, SCREEN_EFFORT, *_cost(SCREEN_MODEL, usage))
 
 
+def gender_note() -> str:
+    """Tells the model the candidate's gender, so first-person past tense agrees (откликнулась / откликнулся)."""
+    if CFG.get("candidate_gender") == "female":
+        return "ПОЛ КАНДИДАТА: женский. Глаголы в прошедшем времени от первого лица пиши в женском роде (сделала, работала, готова).\n\n"
+    return "ПОЛ КАНДИДАТА: мужской. Глаголы в прошедшем времени от первого лица пиши в мужском роде (сделал, работал, готов).\n\n"
+
+
 def write_letter(profile: str, v: dict, description: str, issue: str, direct_message: bool = False) -> tuple[str, tuple]:
-    user = (
+    user = gender_note() + (
         f"ПРОФИЛЬ КАНДИДАТА:\n{profile}\n\nВАКАНСИЯ:\n{_vacancy_text(v, description)}\n\n"
         f"УПОМЯНИ ЧАСОВОЙ ПОЯС: {'да' if issue else 'нет'}"
     )
@@ -144,7 +152,7 @@ ANSWER_SYSTEM = """Ты помогаешь кандидату отвечать �
 
 
 def answer_questions(profile: str, card: str, description: str, ready_answers: str, question: str) -> tuple[list[tuple[str, str]], tuple]:
-    user = (
+    user = gender_note() + (
         f"ПРОФИЛЬ КАНДИДАТА:\n{profile}\n\nГОТОВЫЕ ОТВЕТЫ:\n{ready_answers}\n\n"
         f"КАРТОЧКА ВАКАНСИИ (из бота):\n{card[:3000]}\n\n"
         f"ОПИСАНИЕ ВАКАНСИИ:\n{' '.join(description.split())[:3500]}\n\n"

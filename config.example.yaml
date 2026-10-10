@@ -56,6 +56,9 @@ limits:
 # Basic answers copied under vacancies whose response has a questionnaire.
 # Phone and Telegram come from .env (APPLY_PHONE, APPLY_TELEGRAM).
 # Public Telegram job channels to watch (names without @); empty or missing = none.
+# Gender of the candidate: male | female. Sets the verb forms in the bot's button and in the drafts (откликнулся / откликнулась).
+candidate_gender: male
+
 telegram_channels:
   # - some_job_channel   # public channel name, without @
 

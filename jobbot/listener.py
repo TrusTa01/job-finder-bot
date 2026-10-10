@@ -13,7 +13,7 @@ import requests
 from . import candidates, getmatch, habr, hh, llm, settings, store, tgchannels
 from .filters import CFG
 from .settings import ROOT
-from .notify import API, DISMISS, fill_contacts, ready_answers
+from .notify import API, DISMISS, applied_label, fill_contacts, ready_answers
 
 
 def _call(method: str, payload: dict, timeout: int = 30) -> dict:
@@ -38,7 +38,7 @@ def _handle(callback: dict, chat: str) -> None:
         store.mark_applied(store.connect(), data[len("applied:"):])
         text = message.get("text") or ""
         if not text.startswith("✅"):
-            _call("editMessageText", {**target, "text": "✅ ОТКЛИКНУЛСЯ" + "\n" + text,
+            _call("editMessageText", {**target, "text": applied_label(True) + "\n" + text,
                                        "disable_web_page_preview": True, "reply_markup": DISMISS})
 
 

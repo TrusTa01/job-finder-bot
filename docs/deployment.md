@@ -86,6 +86,7 @@ mkdir -p data && nano data/profile.txt
 **`config.yaml`** defines what to look for. The main parts:
 - `search.queries`: hh.ru searches. `field: name` searches titles, `field: all` searches the full text.
 - `required_work_format: REMOTE`: change if you want hybrid or on-site.
+- `candidate_gender`: `male` or `female`. It sets the verb forms in the bot's button (Откликнулся / Откликнулась) and in the drafted letters. Not detected automatically: set it once when you install a copy.
 - `telegram_channels`: the public Telegram job channels to watch (names without `@`). **This list is not filled in automatically: write the channels for your field by hand.** Without it, or with an empty list, no channels are read. The same list appears in the bot's user guide.
 - `form_answers`: your ready answers for questionnaires (salary, city, experience). Phone and Telegram nick go to `.env` (`APPLY_PHONE`, `APPLY_TELEGRAM`).
 - `title_signals` and `description_signals`: words that make a vacancy relevant. Generic titles such as "Mobile developer" are kept only when the description contains a description signal.
