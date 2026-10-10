@@ -9,11 +9,11 @@ import html
 import subprocess
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 import requests
 
-from . import candidates, getmatch, habr, hh, llm, settings, store, tgchannels
+from . import candidates, getmatch, habr, hh, llm, settings, stats, store, tgchannels
 from .filters import CFG
 from .settings import ROOT
 from .notify import API, DISMISS, applied_label, dismiss_markup, fill_contacts, ready_answers
@@ -98,10 +98,8 @@ def _send_help(chat) -> None:
 def _handle_message(message: dict, chat: str) -> None:
     """Answer /help and /start, or employer questions pasted as a reply to a vacancy card."""
     command = (message.get("text") or "").split("@")[0].strip()
-    if str(message["chat"]["id"]) == chat and command in ("/help", "/start"):
-        return _send_help(chat)
-    if str(message["chat"]["id"]) == chat and command == "/rebuild":
-        return _start_rebuild(message)
+    if str(message["chat"]["id"]) == chat and command in ("/help", "/start", "/stop", "/stats", "/rebuild", *stats.KINDS):
+        return _command(message, command, chat)
     card, question = message.get("reply_to_message"), (message.get("text") or "").strip()
     if str(message["chat"]["id"]) != chat or not card or not question or not (card.get("from") or {}).get("is_bot"):
         return
@@ -135,6 +133,32 @@ def _report_failure(update: dict, chat: str) -> None:
         _reply(message, "Не получилось обработать сообщение, попробуйте ещё раз.")
     except Exception:  # noqa: BLE001 - the reply itself failed; nothing more to do
         pass
+
+
+def _command(message: dict, command: str, chat: str) -> None:
+    """Chat commands: help and start/stop of the search, the monthly figures and the hand-reported outcomes."""
+    db = store.connect()
+    if command in ("/help", "/start"):
+        was_paused = store.get_meta(db, "paused", "0") == "1"
+        store.set_meta(db, "paused", "0")
+        _send_help(chat)
+        if was_paused:
+            _reply(message, "Поиск возобновлён.")
+    elif command == "/stop":
+        store.set_meta(db, "paused", "1")
+        _reply(message, "Поиск остановлен: новые вакансии не ищутся и не присылаются. Команды работают. /start возобновит поиск.")
+    elif command == "/stats":
+        now = datetime.now(timezone.utc)
+        _reply(message, stats.summary(db, now.year, now.month))
+    elif command == "/rebuild":
+        _start_rebuild(message)
+    else:  # an outcome: /interview, /offer, /rejected, /found
+        stats.add(db, stats.KINDS[command], int(time.time()))
+        if command == "/found":
+            store.set_meta(db, "paused", "1")
+            _reply(message, "Записал: работа найдена. Поиск остановлен. /start его вернёт, если понадобится.")
+        else:
+            _reply(message, f"Записал: {stats.KINDS[command]}.")
 
 
 def _start_rebuild(message: dict) -> None:
