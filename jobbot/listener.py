@@ -143,11 +143,11 @@ def _start_rebuild(message: dict) -> None:
     """/rebuild: write the drafts again for vacancies without ✅ or ✕ (tools/rebuild_drafts.py), in a separate process.
 
     The listener only starts it and answers; the rebuild reports its result to the chat itself. A second start within
-    30 minutes is refused, so repeated taps cannot send the cards twice.
+    5 minutes is refused, so repeated taps cannot send the cards twice.
     """
     db = store.connect()
     last = int(store.get_meta(db, "rebuild_started", "0"))
-    if time.time() - last < 30 * 60:
+    if time.time() - last < 5 * 60:
         return _reply(message, "Пересборка уже идёт или запускалась недавно. Итог придёт в этот чат.")
     store.set_meta(db, "rebuild_started", str(int(time.time())))
     with open(ROOT / "data" / "rebuild.log", "a", encoding="utf-8") as log:
