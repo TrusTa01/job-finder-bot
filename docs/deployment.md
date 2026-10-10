@@ -128,7 +128,7 @@ systemctl daemon-reload && systemctl enable --now jobbot-listener
 systemctl status jobbot-listener
 ```
 
-The same service answers questionnaires: reply to a vacancy card with the employer's questions and the bot replies with drafted answers. Set `form_answers` in `config.yaml` and `APPLY_PHONE`, `APPLY_TELEGRAM` in `.env` first (see the examples). Only presses and replies from the chat in `TELEGRAM_CHAT_ID` are honoured. Telegram refuses to delete messages older than 48 hours; for those the text is replaced by "✕ убрано". One bot token can be read by only one process (`getUpdates`), so every copy of the bot needs its own Telegram bot and its own listener service (`jobbot-listener2` and so on).
+The same service answers questionnaires: reply to a vacancy card with the employer's questions and the bot replies with drafted answers. Set `form_answers` in `config.yaml` and `APPLY_PHONE`, `APPLY_TELEGRAM` in `.env` first (see the examples). On its first start the listener sends the user guide `docs/bot-help.txt` to the chat once (and registers the `/help` command); edit that file for the person who will use this copy. Only presses and replies from the chat in `TELEGRAM_CHAT_ID` are honoured. Telegram refuses to delete messages older than 48 hours; for those the text is replaced by "✕ убрано". One bot token can be read by only one process (`getUpdates`), so every copy of the bot needs its own Telegram bot and its own listener service (`jobbot-listener2` and so on).
 
 ## Running a second copy on the same server
 

@@ -12,6 +12,7 @@ import requests
 
 from . import candidates, hh, llm, settings, store
 from .filters import CFG
+from .settings import ROOT
 from .notify import API, DISMISS, fill_contacts, ready_answers
 
 
@@ -65,8 +66,18 @@ def _format_answers(items: list[tuple[str, str]]) -> str:
     return (chr(10) * 2).join(blocks)
 
 
+HELP_PATH = ROOT / "docs" / "bot-help.txt"
+
+
+def _send_help(chat) -> None:
+    text = HELP_PATH.read_text(encoding="utf-8") if HELP_PATH.exists() else "Инструкции пока нет."
+    _call("sendMessage", {"chat_id": chat, "text": text, "disable_web_page_preview": True, "reply_markup": DISMISS})
+
+
 def _handle_message(message: dict, chat: str) -> None:
-    """Answer employer questions pasted as a reply to a vacancy card."""
+    """Answer /help and /start, or employer questions pasted as a reply to a vacancy card."""
+    if str(message["chat"]["id"]) == chat and (message.get("text") or "").split("@")[0].strip() in ("/help", "/start"):
+        return _send_help(chat)
     card, question = message.get("reply_to_message"), (message.get("text") or "").strip()
     if str(message["chat"]["id"]) != chat or not card or not question or not (card.get("from") or {}).get("is_bot"):
         return
@@ -91,8 +102,21 @@ def _handle_message(message: dict, chat: str) -> None:
         _reply(message, "Не получилось составить ответ.")
 
 
+def _announce(chat: str) -> None:
+    """On the first start of a bot copy: register the command menu and send the instruction once."""
+    _call("setMyCommands", {"commands": [{"command": "help", "description": "Как пользоваться ботом"}]})
+    db = store.connect()
+    if store.get_meta(db, "help_sent", "0") != "1":
+        _send_help(chat)
+        store.set_meta(db, "help_sent", "1")
+
+
 def run() -> None:
     chat = settings.get("TELEGRAM_CHAT_ID")
+    try:
+        _announce(chat)
+    except (requests.RequestException, ValueError, KeyError):  # Telegram may be unreachable at start; /help still works later
+        pass
     offset = 0
     failures = 0
     while True:
