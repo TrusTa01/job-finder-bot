@@ -11,7 +11,7 @@ import requests
 
 from . import candidates, hh, llm, settings, store
 from .filters import CFG
-from .notify import API, DISMISS, ready_answers
+from .notify import API, DISMISS, fill_contacts, ready_answers
 
 
 def _call(method: str, payload: dict, timeout: int = 30) -> dict:
@@ -68,13 +68,13 @@ def _handle_message(message: dict, chat: str) -> None:
         return _reply(message, "Нет файла профиля, ответить не могу.")
     vacancy_id = _vacancy_id(card)
     description = hh.load_cache().get(vacancy_id or "", "")
-    ready = ready_answers(contacts=False)  # the model never sees the phone number
+    ready = ready_answers(mask=True)  # the model never sees the real phone number
     try:
         answer, usage = llm.answer_questions(profile, card.get("text") or "", description, ready, question)
         store.log_usage(db, *usage)
     except RuntimeError:
         return _reply(message, "Модель не ответила, попробуйте ещё раз.")
-    _reply(message, answer or "Не получилось составить ответ.")
+    _reply(message, fill_contacts(answer) if answer else "Не получилось составить ответ.")
 
 
 def run() -> None:

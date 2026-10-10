@@ -65,20 +65,42 @@ def format_telegram_post(row) -> str:
     return "\n".join(lines) + resume_checklist(row)
 
 
-def ready_answers(contacts: bool = True) -> str:
-    """Basic answers (salary, city, experience, optionally contacts), one per line."""
-    ans = CFG.get("form_answers") or {}
+CONTACT_TOKENS = {"[TELEGRAM]": "telegram", "[PHONE]": "phone", "[WHATSAPP]": "whatsapp"}
+
+
+def contacts() -> dict:
     phone, telegram = settings.get("APPLY_PHONE"), settings.get("APPLY_TELEGRAM")
+    return {
+        "telegram": "@" + telegram.lstrip("@") if telegram else "",
+        "phone": phone,
+        "whatsapp": "можно писать на " + phone if phone else "",
+    }
+
+
+def ready_answers(mask: bool = False) -> str:
+    """Basic answers (salary, city, experience, contacts), one per line. With mask the contacts are placeholders
+    such as [PHONE], so the real values never reach the model; fill_contacts() puts them back."""
+    ans = CFG.get("form_answers") or {}
+    have = contacts()
+    shown = {t: (t if mask and have[k] else have[k]) for t, k in CONTACT_TOKENS.items()}
     pairs = [
         ("Желаемая оплата", ans.get("salary")),
         ("Город", ans.get("city")),
         ("Опыт Flutter Android/iOS", ans.get("mobile_experience")),
         ("Опыт Flutter Web", ans.get("web_experience")),
-        ("Telegram", "@" + telegram.lstrip("@") if telegram else ""),
-        ("Телефон", phone),
-        ("WhatsApp", "можно писать на " + phone if phone else ""),
+        ("Telegram", shown["[TELEGRAM]"]),
+        ("Телефон", shown["[PHONE]"]),
+        ("WhatsApp", shown["[WHATSAPP]"]),
     ]
-    return chr(10).join(f"{k}: {v}" for k, v in pairs[: None if contacts else 4] if v)
+    return chr(10).join(f"{k}: {v}" for k, v in pairs if v)
+
+
+def fill_contacts(text: str) -> str:
+    """Replace the contact placeholders in the model's answer with the real values from .env."""
+    have = contacts()
+    for token, key in CONTACT_TOKENS.items():
+        text = text.replace(token, have[key] or "подставьте сами")
+    return text
 
 
 def form_answers(row) -> str:
