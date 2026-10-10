@@ -1,13 +1,13 @@
-"""Monthly counts for the search: applications (✅), not interesting (❌) and outcomes reported by hand in the chat.
+"""Monthly counts for the search: applications (✅), not interesting (❌) and interviews and offers entered by hand.
 
-Outcomes are commands, not buttons: /interview, /offer, /rejected, /found. Each one is one event with a timestamp;
-the monthly summary counts them. Nothing here talks to hh.ru.
+Interviews and offers are commands in the chat (/interview, /offer). A rejection is not entered by hand: an
+application older than WAIT_DAYS without an interview or an offer counts as rejected. Nothing here talks to hh.ru.
 """
+import time
 from datetime import datetime, timezone
 
-from . import store
-
-KINDS = {"/interview": "interview", "/offer": "offer", "/rejected": "rejected", "/found": "found"}
+KINDS = {"/interview": "interview", "/offer": "offer"}
+WAIT_DAYS = 7
 MONTHS = ["", "январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"]
 
 
@@ -28,26 +28,31 @@ def _bounds(year: int, month: int) -> tuple[int, int]:
     return int(start.timestamp()), int(end.timestamp())
 
 
-def summary(db, year: int, month: int) -> str:
+def summary(db, year: int, month: int, now: int | None = None) -> str:
     connect(db)
     start, end = _bounds(year, month)
+    cutoff = (now or int(time.time())) - WAIT_DAYS * 86400
     applied = db.execute("SELECT COUNT(*) FROM vacancies WHERE applied_at >= ? AND applied_at < ?", (start, end)).fetchone()[0]
     dismissed = db.execute(
         "SELECT COUNT(*) FROM vacancies WHERE status='dismissed' AND dismissed_at >= ? AND dismissed_at < ?", (start, end)
     ).fetchone()[0]
+    waiting = db.execute(
+        "SELECT COUNT(*) FROM vacancies WHERE applied_at >= ? AND applied_at < ? AND applied_at >= ?", (start, end, cutoff)
+    ).fetchone()[0]
     counts = {k: 0 for k in KINDS.values()}
     for kind, n in db.execute("SELECT kind, COUNT(*) FROM events WHERE ts >= ? AND ts < ? GROUP BY kind", (start, end)):
         counts[kind] = n
-    no_answer = max(0, applied - counts["interview"] - counts["offer"] - counts["rejected"])
-    return (
-        f"Итоги за {MONTHS[month]} {year}\n"
-        f"Откликов (✅): {applied}\n"
-        f"Неинтересно (❌, не считается в откликах): {dismissed}\n"
-        f"Собеседований: {counts['interview']}\n"
-        f"Офферов: {counts['offer']}\n"
-        f"Отказов: {counts['rejected']}\n"
-        f"Без ответа (примерно, откликов минус отмеченные): {no_answer}"
-    )
+    rejected = max(0, applied - waiting - counts["interview"] - counts["offer"])
+    lines = [
+        f"Итоги за {MONTHS[month]} {year}",
+        f"Откликов (✅): {applied}",
+        f"Неинтересно (❌, не в счёт откликов): {dismissed}",
+        f"Собеседований: {counts['interview']}",
+        f"Офферов: {counts['offer']}",
+        f"Отказов (нет ответа больше {WAIT_DAYS} дней): {rejected}",
+        f"Ещё ждём ответа: {waiting}",
+    ]
+    return "\n".join(lines)
 
 
 def previous_month(now: datetime) -> tuple[int, int]:

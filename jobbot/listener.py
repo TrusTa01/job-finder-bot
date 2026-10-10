@@ -140,9 +140,10 @@ def _command(message: dict, command: str, chat: str) -> None:
     db = store.connect()
     if command in ("/help", "/start"):
         was_paused = store.get_meta(db, "paused", "0") == "1"
-        store.set_meta(db, "paused", "0")
+        if command == "/start":
+            store.set_meta(db, "paused", "0")
         _send_help(chat)
-        if was_paused:
+        if command == "/start" and was_paused:
             _reply(message, "Поиск возобновлён.")
     elif command == "/stop":
         store.set_meta(db, "paused", "1")
@@ -152,13 +153,9 @@ def _command(message: dict, command: str, chat: str) -> None:
         _reply(message, stats.summary(db, now.year, now.month))
     elif command == "/rebuild":
         _start_rebuild(message)
-    else:  # an outcome: /interview, /offer, /rejected, /found
+    else:  # an outcome: /interview or /offer
         stats.add(db, stats.KINDS[command], int(time.time()))
-        if command == "/found":
-            store.set_meta(db, "paused", "1")
-            _reply(message, "Записал: работа найдена. Поиск остановлен. /start его вернёт, если понадобится.")
-        else:
-            _reply(message, f"Записал: {stats.KINDS[command]}.")
+        _reply(message, f"Записал: {stats.KINDS[command]}.")
 
 
 def _start_rebuild(message: dict) -> None:
@@ -178,9 +175,20 @@ def _start_rebuild(message: dict) -> None:
     _reply(message, "Пересборка запущена: напишу заново письма для вакансий без ✅ и ✕. Итог придёт сюда.")
 
 
+MENU = [
+    ("start", "Как пользоваться и запустить поиск"),
+    ("stop", "Остановить поиск"),
+    ("stats", "Итоги текущего месяца"),
+    ("interview", "Записать собеседование"),
+    ("offer", "Записать оффер"),
+    ("rebuild", "Написать письма заново для открытых вакансий"),
+    ("help", "Инструкция"),
+]
+
+
 def _announce(chat: str) -> None:
     """On the first start of a bot copy: register the command menu and send the instruction once."""
-    _call("setMyCommands", {"commands": [{"command": "help", "description": "Как пользоваться ботом"}, {"command": "rebuild", "description": "Написать письма заново для открытых вакансий"}]})
+    _call("setMyCommands", {"commands": [{"command": c, "description": d} for c, d in MENU]})
     db = store.connect()
     if store.get_meta(db, "help_sent", "0") != "1":
         _send_help(chat)
