@@ -53,20 +53,15 @@ def _vacancy_id(card: dict) -> str | None:
 
 def _reply(message: dict, text: str, parse_mode: str | None = None) -> None:
     payload = {"chat_id": message["chat"]["id"], "text": text[:4000], "reply_to_message_id": message["message_id"],
-               "allow_sending_without_reply": True, "disable_web_page_preview": True}
+               "allow_sending_without_reply": True, "disable_web_page_preview": True, "reply_markup": DISMISS}
     if parse_mode:
         payload["parse_mode"] = parse_mode
     _call("sendMessage", payload)
 
 
-def _human(text: str) -> str:
-    """Long and medium dashes read like machine text: use a plain hyphen."""
-    return text.replace(" — ", " - ").replace(" – ", " - ").replace("—", "-").replace("–", "-")
-
-
 def _format_answers(items: list[tuple[str, str]]) -> str:
     """Telegram HTML: the question in bold, the answer below it."""
-    blocks = [f"<b>{html.escape(_human(q))}</b>" + chr(10) + html.escape(_human(fill_contacts(a))) for q, a in items if a]
+    blocks = [f"<b>{html.escape(llm.plain_dashes(q))}</b>" + chr(10) + html.escape(llm.plain_dashes(fill_contacts(a))) for q, a in items if a]
     return (chr(10) * 2).join(blocks)
 
 
@@ -105,10 +100,13 @@ def run() -> None:
             data = _call("getUpdates", {"offset": offset, "timeout": 50, "allowed_updates": ["callback_query", "message"]}, timeout=70)
             for update in data.get("result", []):
                 offset = update["update_id"] + 1
-                if "callback_query" in update:
-                    _handle(update["callback_query"], chat)
-                elif "message" in update:
-                    _handle_message(update["message"], chat)
+                try:
+                    if "callback_query" in update:
+                        _handle(update["callback_query"], chat)
+                    elif "message" in update:
+                        _handle_message(update["message"], chat)
+                except Exception:  # noqa: BLE001 - one bad update must not stop the others; never print (the URL holds the token)
+                    pass
             failures = 0
         except (requests.RequestException, ValueError, KeyError):  # never print the error: the URL holds the token
             failures += 1

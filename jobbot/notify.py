@@ -1,4 +1,5 @@
 """Telegram reports through a proxy (api.telegram.org is blocked from Russian IPs)."""
+import re
 import time
 
 import requests
@@ -82,7 +83,7 @@ def ready_answers(mask: bool = False) -> str:
     such as [PHONE], so the real values never reach the model; fill_contacts() puts them back."""
     ans = CFG.get("form_answers") or {}
     have = contacts()
-    shown = {t: (t if mask and have[k] else have[k]) for t, k in CONTACT_TOKENS.items()}
+    shown = {t: ((t if have[k] else "не указан, напиши «подставьте сами»") if mask else have[k]) for t, k in CONTACT_TOKENS.items()}
     pairs = [
         ("Желаемая оплата", ans.get("salary")),
         ("Город", ans.get("city")),
@@ -99,7 +100,8 @@ def fill_contacts(text: str) -> str:
     """Replace the contact placeholders in the model's answer with the real values from .env."""
     have = contacts()
     for token, key in CONTACT_TOKENS.items():
-        text = text.replace(token, have[key] or "подставьте сами")
+        name = token.strip("[]")
+        text = re.sub(re.escape("[") + " *" + name + " *" + re.escape("]"), lambda _: have[key] or "подставьте сами", text, flags=re.IGNORECASE)
     return text
 
 
