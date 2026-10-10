@@ -55,6 +55,10 @@ limits:
 
 # Basic answers copied under vacancies whose response has a questionnaire.
 # Phone and Telegram come from .env (APPLY_PHONE, APPLY_TELEGRAM).
+# Public Telegram job channels to watch (names without @); empty or missing = none.
+telegram_channels:
+  # - some_job_channel   # public channel name, without @
+
 form_answers:
   salary: "100 000 RUB"
   city: "Your city"

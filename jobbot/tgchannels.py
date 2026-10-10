@@ -12,8 +12,9 @@ from datetime import datetime, timezone
 import requests
 
 from . import candidates, settings, store
+from .filters import CFG
 
-CHANNELS = ()
+CHANNELS = tuple(CFG.get("telegram_channels") or ())  # channel names without @, set in config.yaml
 CHECK_EVERY_SECONDS = 2 * 3600
 MAX_PER_RUN = 5
 MAX_AGE_DAYS = 30

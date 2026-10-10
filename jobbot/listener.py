@@ -10,7 +10,7 @@ import time
 
 import requests
 
-from . import candidates, hh, llm, settings, store
+from . import candidates, getmatch, habr, hh, llm, settings, store, tgchannels
 from .filters import CFG
 from .settings import ROOT
 from .notify import API, DISMISS, fill_contacts, ready_answers
@@ -69,8 +69,25 @@ def _format_answers(items: list[tuple[str, str]]) -> str:
 HELP_PATH = ROOT / "docs" / "bot-help.txt"
 
 
+def _sources_text() -> str:
+    """The "where the bot searches" list, built from the config and the source modules, so every copy shows its own."""
+    queries = list(dict.fromkeys(q["text"] for q in CFG["search"]["queries"]))
+    lines = [
+        f"- hh.ru, при каждом запуске бота. Формат: {'удалённо' if CFG.get('required_work_format') == 'REMOTE' else 'любой'}. "
+        f"Запросы: {', '.join(queries)}.",
+        f"- Habr Career, раз в {habr.CHECK_EVERY_SECONDS // 3600} ч.",
+        f"- GetMatch, раз в {getmatch.CHECK_EVERY_SECONDS // 3600} ч.",
+    ]
+    if tgchannels.CHANNELS:
+        lines.append(f"- Telegram-каналы, раз в {tgchannels.CHECK_EVERY_SECONDS // 3600} ч, посты не старше {tgchannels.MAX_AGE_DAYS} дней. "
+                     "Только эти каналы (вместо письма бот готовит короткое личное сообщение автору поста):")
+        lines += [f"  - @{c}" for c in tgchannels.CHANNELS]
+    lines.append("Другие источники бот не смотрит.")
+    return chr(10).join(lines)
+
+
 def _send_help(chat) -> None:
-    text = HELP_PATH.read_text(encoding="utf-8") if HELP_PATH.exists() else "Инструкции пока нет."
+    text = HELP_PATH.read_text(encoding="utf-8").replace("{sources}", _sources_text()) if HELP_PATH.exists() else "Инструкции пока нет."
     _call("sendMessage", {"chat_id": chat, "text": text, "disable_web_page_preview": True, "reply_markup": DISMISS})
 
 
