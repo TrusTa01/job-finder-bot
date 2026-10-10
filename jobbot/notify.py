@@ -25,8 +25,8 @@ def applied_label(done: bool) -> str:
     """Button text (done=False) or the mark on a card (done=True), in the candidate's gender (candidate_gender)."""
     female = CFG.get("candidate_gender") == "female"
     if done:
-        return "✅ ОТКЛИКНУЛАСЬ" if female else "✅ ОТКЛИКНУЛСЯ"
-    return "✅ Откликнулась" if female else "✅ Откликнулся"
+        return "ОТКЛИКНУЛАСЬ ✅" if female else "ОТКЛИКНУЛСЯ ✅"
+    return "Откликнулась ✅" if female else "Откликнулся ✅"
 
 
 def _keyboard(vacancy_id: str | None) -> dict:
