@@ -79,6 +79,17 @@ def evaluate(vacancy: dict, description: str | None = None) -> Verdict:
     return Verdict(False, "low" if low else "normal", reason)
 
 
+def priority_after_screen(fit: str, grade: str | None, issue: str) -> str:
+    """Priority from the LLM screening: salary is rarely published, so it is not used.
+
+    Low when the fit is only partial, the vacancy asks for more than junior/middle experience
+    or the country/schedule looks problematic; otherwise normal.
+    """
+    if fit != "yes" or issue or grade in ("senior", "middle"):
+        return "low"
+    return "normal"
+
+
 def resume_checklist(row) -> str:
     """Which of the configured resumes fit this vacancy (config key `resumes`); empty when not configured."""
     resumes = CFG.get("resumes") or []

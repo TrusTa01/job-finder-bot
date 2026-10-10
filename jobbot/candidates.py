@@ -2,7 +2,7 @@
 LLM screening, a draft letter, storage and the Telegram report. hh.ru has its own loop in run.py.
 """
 from . import llm, notify, store
-from .filters import CFG
+from .filters import CFG, priority_after_screen
 from .settings import PROFILE_PATH
 
 SENT, DROPPED, SAVED, RETRY, BUDGET = "sent", "dropped", "saved", "retry", "budget"
@@ -32,7 +32,7 @@ def handle(db, profile: str, entry: dict, description: str, direct_message: bool
     except RuntimeError:
         return RETRY  # not saved, so the next check retries it
     store.save_vacancy(
-        db, entry, "ready", "normal", fit=fit, reason=decision.get("reason"), issue=issue,
+        db, entry, "ready", priority_after_screen(fit, decision.get("required_grade"), issue), fit=fit, reason=decision.get("reason"), issue=issue,
         stack=decision.get("stack"), letter=letter, snippet=snippet,
     )
     row = db.execute("SELECT * FROM vacancies WHERE id=?", (entry["id"],)).fetchone()

@@ -8,7 +8,7 @@ import argparse
 import sys
 
 from . import alerts, getmatch, habr, hh, llm, notify, store, tgchannels
-from .filters import CFG, NEEDS_DESCRIPTION, evaluate
+from .filters import CFG, NEEDS_DESCRIPTION, evaluate, priority_after_screen
 from .settings import PROFILE_PATH
 
 
@@ -96,7 +96,7 @@ def main() -> None:
             stats["errors"] += 1  # not saved, so the next run retries it
             continue
         store.save_vacancy(
-            db, v, "ready", verdict.priority, fit=fit, reason=decision.get("reason"),
+            db, v, "ready", priority_after_screen(fit, decision.get("required_grade"), issue), fit=fit, reason=decision.get("reason"),
             issue=issue, grade=decision.get("required_grade"), stack=decision.get("stack"), letter=letter,
         )
         stats["ready"] += 1
