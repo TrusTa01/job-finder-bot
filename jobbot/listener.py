@@ -102,6 +102,17 @@ def _handle_message(message: dict, chat: str) -> None:
         _reply(message, "Не получилось составить ответ.")
 
 
+def _report_failure(update: dict, chat: str) -> None:
+    """Tell the user that their message was not handled, without the exception text (it may hold the token URL)."""
+    message = update.get("message")
+    if not message or str(message["chat"]["id"]) != chat:
+        return
+    try:
+        _reply(message, "Не получилось обработать сообщение, попробуйте ещё раз.")
+    except Exception:  # noqa: BLE001 - the reply itself failed; nothing more to do
+        pass
+
+
 def _announce(chat: str) -> None:
     """On the first start of a bot copy: register the command menu and send the instruction once."""
     _call("setMyCommands", {"commands": [{"command": "help", "description": "Как пользоваться ботом"}]})
@@ -130,7 +141,7 @@ def run() -> None:
                     elif "message" in update:
                         _handle_message(update["message"], chat)
                 except Exception:  # noqa: BLE001 - one bad update must not stop the others; never print (the URL holds the token)
-                    pass
+                    _report_failure(update, chat)
             failures = 0
         except (requests.RequestException, ValueError, KeyError):  # never print the error: the URL holds the token
             failures += 1
