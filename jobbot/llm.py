@@ -120,3 +120,23 @@ def write_letter(profile: str, v: dict, description: str, issue: str, direct_mes
     )
     out, usage = _post(LETTER_MODEL, LETTER_EFFORT, DM_SYSTEM if direct_message else LETTER_SYSTEM, user)
     return str(out.get("letter", "")).strip(), ("letter", LETTER_MODEL, LETTER_EFFORT, *_cost(LETTER_MODEL, usage))
+
+
+ANSWER_SYSTEM = """Ты помогаешь кандидату отвечать на вопросы работодателя при отклике на вакансию (анкета, вопросы рекрутёра). Верни JSON {"answer": "..."}.
+Правила:
+- Отвечай от первого лица кандидата, по-русски, коротко и по делу: на каждый вопрос свой ответ, в порядке вопросов, формат «вопрос (кратко): ответ».
+- Используй только факты из профиля и из блока «ГОТОВЫЕ ОТВЕТЫ» (зарплата, город, опыт). Если вопрос про то, чего в профиле нет (опыт, навык, сертификат), не придумывай: честно напиши, что этого опыта нет, или «в профиле этого нет, ответьте сами».
+- Для телефона, почты, ника в Telegram и других контактов напиши «подставьте сами». Не выдумывай ссылки и данные.
+- Не обещай гибкость графика, релокацию и условия, которых нет в профиле. Если вопрос про график или часовой пояс: кандидат в своём часовом поясе, на связи с 07:00 до 16:00 по МСК.
+- Без эмодзи и шаблонной вежливости. Если вопрос непонятен, задай уточняющий вопрос одной фразой. Верни только JSON."""
+
+
+def answer_questions(profile: str, card: str, description: str, ready_answers: str, question: str) -> tuple[str, tuple]:
+    user = (
+        f"ПРОФИЛЬ КАНДИДАТА:\n{profile}\n\nГОТОВЫЕ ОТВЕТЫ:\n{ready_answers}\n\n"
+        f"КАРТОЧКА ВАКАНСИИ (из бота):\n{card[:3000]}\n\n"
+        f"ОПИСАНИЕ ВАКАНСИИ:\n{' '.join(description.split())[:3500]}\n\n"
+        f"ВОПРОСЫ РАБОТОДАТЕЛЯ:\n{question[:3000]}"
+    )
+    out, usage = _post(LETTER_MODEL, LETTER_EFFORT, ANSWER_SYSTEM, user)
+    return str(out.get("answer", "")).strip(), ("answer", LETTER_MODEL, LETTER_EFFORT, *_cost(LETTER_MODEL, usage))

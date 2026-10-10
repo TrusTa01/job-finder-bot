@@ -65,10 +65,8 @@ def format_telegram_post(row) -> str:
     return "\n".join(lines) + resume_checklist(row)
 
 
-def form_answers(row) -> str:
-    """Warning and ready-to-copy basic answers for vacancies whose response has a questionnaire."""
-    if not row["has_test"]:
-        return ""
+def ready_answers(contacts: bool = True) -> str:
+    """Basic answers (salary, city, experience, optionally contacts), one per line."""
     ans = CFG.get("form_answers") or {}
     phone, telegram = settings.get("APPLY_PHONE"), settings.get("APPLY_TELEGRAM")
     pairs = [
@@ -80,8 +78,15 @@ def form_answers(row) -> str:
         ("Телефон", phone),
         ("WhatsApp", "можно писать на " + phone if phone else ""),
     ]
-    lines = [f"{k}: {v}" for k, v in pairs if v]
-    return "\n\n⚠ При отклике будет анкета. Базовые ответы для копирования:\n" + "\n".join(lines)
+    return chr(10).join(f"{k}: {v}" for k, v in pairs[: None if contacts else 4] if v)
+
+
+def form_answers(row) -> str:
+    """Warning and the basic answers for vacancies whose response has a questionnaire."""
+    if not row["has_test"]:
+        return ""
+    lines = ready_answers()
+    return "\n\n⚠ При отклике будет анкета. Базовые ответы для копирования:\n" + lines
 
 
 def format_vacancy(row) -> str:
