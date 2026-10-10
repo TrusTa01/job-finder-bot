@@ -69,6 +69,8 @@ def main() -> None:
         notify.send("ОБНОВЛЕНО: письмо написано заново по новым правилам\n\n" + notify.format_vacancy(fresh), row["id"])
         done += 1
     print(f"rebuilt: {done}, failed: {failed}")
+    if not args.ids:
+        notify.send(f"Пересборка готова: обновлено карточек {done}, не удалось {failed}. Старые карточки в чате не удалены, их можно убрать вручную.")
 
 
 if __name__ == "__main__":

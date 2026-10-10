@@ -6,7 +6,10 @@ Long polling through the same proxy as notify.py. Only presses from the configur
 If Telegram refuses to delete (messages older than 48 hours), the text is replaced by a short stub.
 """
 import html
+import subprocess
+import sys
 import time
+from datetime import datetime
 
 import requests
 
@@ -96,8 +99,11 @@ def _send_help(chat) -> None:
 
 def _handle_message(message: dict, chat: str) -> None:
     """Answer /help and /start, or employer questions pasted as a reply to a vacancy card."""
-    if str(message["chat"]["id"]) == chat and (message.get("text") or "").split("@")[0].strip() in ("/help", "/start"):
+    command = (message.get("text") or "").split("@")[0].strip()
+    if str(message["chat"]["id"]) == chat and command in ("/help", "/start"):
         return _send_help(chat)
+    if str(message["chat"]["id"]) == chat and command == "/rebuild":
+        return _start_rebuild(message)
     card, question = message.get("reply_to_message"), (message.get("text") or "").strip()
     if str(message["chat"]["id"]) != chat or not card or not question or not (card.get("from") or {}).get("is_bot"):
         return
@@ -133,9 +139,26 @@ def _report_failure(update: dict, chat: str) -> None:
         pass
 
 
+def _start_rebuild(message: dict) -> None:
+    """/rebuild: write the drafts again for vacancies without ✅ or ✕ (tools/rebuild_drafts.py), in a separate process.
+
+    The listener only starts it and answers; the rebuild reports its result to the chat itself. A second start within
+    30 minutes is refused, so repeated taps cannot send the cards twice.
+    """
+    db = store.connect()
+    last = int(store.get_meta(db, "rebuild_started", "0"))
+    if time.time() - last < 30 * 60:
+        return _reply(message, "Пересборка уже идёт или запускалась недавно. Итог придёт в этот чат.")
+    store.set_meta(db, "rebuild_started", str(int(time.time())))
+    with open(ROOT / "data" / "rebuild.log", "a", encoding="utf-8") as log:
+        log.write(f"--- {datetime.now().isoformat(timespec='seconds')}\n")
+        subprocess.Popen([sys.executable, "-m", "tools.rebuild_drafts"], cwd=str(ROOT), stdout=log, stderr=subprocess.STDOUT)
+    _reply(message, "Пересборка запущена: напишу заново письма для вакансий без ✅ и ✕. Итог придёт сюда.")
+
+
 def _announce(chat: str) -> None:
     """On the first start of a bot copy: register the command menu and send the instruction once."""
-    _call("setMyCommands", {"commands": [{"command": "help", "description": "Как пользоваться ботом"}]})
+    _call("setMyCommands", {"commands": [{"command": "help", "description": "Как пользоваться ботом"}, {"command": "rebuild", "description": "Написать письма заново для открытых вакансий"}]})
     db = store.connect()
     if store.get_meta(db, "help_sent", "0") != "1":
         _send_help(chat)
