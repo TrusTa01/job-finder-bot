@@ -5,6 +5,7 @@ Runs as a service: python -m jobbot.listener
 Long polling through the same proxy as notify.py. Only presses from the configured chat are honoured.
 If Telegram refuses to delete (messages older than 48 hours), the text is replaced by a short stub.
 """
+import html
 import time
 
 import requests
@@ -50,9 +51,23 @@ def _vacancy_id(card: dict) -> str | None:
     return None
 
 
-def _reply(message: dict, text: str) -> None:
-    _call("sendMessage", {"chat_id": message["chat"]["id"], "text": text[:4000], "reply_to_message_id": message["message_id"],
-                          "allow_sending_without_reply": True, "disable_web_page_preview": True})
+def _reply(message: dict, text: str, parse_mode: str | None = None) -> None:
+    payload = {"chat_id": message["chat"]["id"], "text": text[:4000], "reply_to_message_id": message["message_id"],
+               "allow_sending_without_reply": True, "disable_web_page_preview": True}
+    if parse_mode:
+        payload["parse_mode"] = parse_mode
+    _call("sendMessage", payload)
+
+
+def _human(text: str) -> str:
+    """Long and medium dashes read like machine text: use a plain hyphen."""
+    return text.replace(" — ", " - ").replace(" – ", " - ").replace("—", "-").replace("–", "-")
+
+
+def _format_answers(items: list[tuple[str, str]]) -> str:
+    """Telegram HTML: the question in bold, the answer below it."""
+    blocks = [f"<b>{html.escape(_human(q))}</b>" + chr(10) + html.escape(_human(fill_contacts(a))) for q, a in items if a]
+    return (chr(10) * 2).join(blocks)
 
 
 def _handle_message(message: dict, chat: str) -> None:
@@ -70,11 +85,15 @@ def _handle_message(message: dict, chat: str) -> None:
     description = hh.load_cache().get(vacancy_id or "", "")
     ready = ready_answers(mask=True)  # the model never sees the real phone number
     try:
-        answer, usage = llm.answer_questions(profile, card.get("text") or "", description, ready, question)
+        items, usage = llm.answer_questions(profile, card.get("text") or "", description, ready, question)
         store.log_usage(db, *usage)
     except RuntimeError:
         return _reply(message, "Модель не ответила, попробуйте ещё раз.")
-    _reply(message, fill_contacts(answer) if answer else "Не получилось составить ответ.")
+    text = _format_answers(items)
+    if text:
+        _reply(message, text, "HTML")
+    else:
+        _reply(message, "Не получилось составить ответ.")
 
 
 def run() -> None:

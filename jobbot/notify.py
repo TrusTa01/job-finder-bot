@@ -73,7 +73,7 @@ def contacts() -> dict:
     return {
         "telegram": "@" + telegram.lstrip("@") if telegram else "",
         "phone": phone,
-        "whatsapp": "можно писать на " + phone if phone else "",
+        "whatsapp": phone,
     }
 
 
@@ -90,7 +90,7 @@ def ready_answers(mask: bool = False) -> str:
         ("Опыт Flutter Web", ans.get("web_experience")),
         ("Telegram", shown["[TELEGRAM]"]),
         ("Телефон", shown["[PHONE]"]),
-        ("WhatsApp", shown["[WHATSAPP]"]),
+        ("WhatsApp (можно писать)", shown["[WHATSAPP]"]),
     ]
     return chr(10).join(f"{k}: {v}" for k, v in pairs if v)
 
