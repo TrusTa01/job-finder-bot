@@ -29,7 +29,7 @@ def connect() -> sqlite3.Connection:
     db = sqlite3.connect(DB_PATH)
     db.row_factory = sqlite3.Row
     db.executescript(SCHEMA)
-    for column in ("stack TEXT", "applied_at INTEGER", "snippet TEXT", "has_test INTEGER"):  # migrations for databases created before these columns
+    for column in ("stack TEXT", "applied_at INTEGER", "snippet TEXT", "has_test INTEGER", "dismissed_at INTEGER"):  # migrations for databases created before these columns
         try:
             db.execute(f"ALTER TABLE vacancies ADD COLUMN {column}")
             db.commit()
@@ -71,6 +71,12 @@ def save_vacancy(db: sqlite3.Connection, v: dict, status: str, priority: str = "
 
 def mark_notified(db: sqlite3.Connection, vacancy_id: str) -> None:
     db.execute("UPDATE vacancies SET status='notified', notified_at=? WHERE id=?", (int(time.time()), vacancy_id))
+    db.commit()
+
+
+def mark_dismissed(db: sqlite3.Connection, vacancy_id: str) -> None:
+    """The user pressed ✕: the vacancy is not wanted, so rebuilds skip it and it is never sent again."""
+    db.execute("UPDATE vacancies SET status='dismissed', dismissed_at=? WHERE id=? AND applied_at IS NULL", (int(time.time()), vacancy_id))
     db.commit()
 
 

@@ -12,6 +12,15 @@ LIMIT = 4000  # Telegram caps a message at 4096 characters
 DISMISS = {"inline_keyboard": [[{"text": "✕", "callback_data": "dismiss"}]]}  # handled by listener.py
 
 
+def dismiss_button(vacancy_id: str | None) -> dict:
+    """The ✕ button; with a vacancy id the listener also records the dismissal in the database."""
+    return {"text": "✕", "callback_data": f"dismiss:{vacancy_id}" if vacancy_id else "dismiss"}
+
+
+def dismiss_markup(vacancy_id: str | None) -> dict:
+    return {"inline_keyboard": [[dismiss_button(vacancy_id)]]}
+
+
 def applied_label(done: bool) -> str:
     """Button text (done=False) or the mark on a card (done=True), in the candidate's gender (candidate_gender)."""
     female = CFG.get("candidate_gender") == "female"
@@ -24,7 +33,7 @@ def _keyboard(vacancy_id: str | None) -> dict:
     """✕ always; ✅ (applied) only for vacancies. callback_data is capped at 64 bytes by Telegram."""
     if not vacancy_id or len(f"applied:{vacancy_id}".encode()) > 64:
         return DISMISS
-    return {"inline_keyboard": [[{"text": applied_label(False), "callback_data": f"applied:{vacancy_id}"}, *DISMISS["inline_keyboard"][0]]]}
+    return {"inline_keyboard": [[{"text": applied_label(False), "callback_data": f"applied:{vacancy_id}"}, dismiss_button(vacancy_id)]]}
 
 
 def send(text: str, vacancy_id: str | None = None) -> bool:

@@ -13,7 +13,7 @@ import requests
 from . import candidates, getmatch, habr, hh, llm, settings, store, tgchannels
 from .filters import CFG
 from .settings import ROOT
-from .notify import API, DISMISS, applied_label, fill_contacts, ready_answers
+from .notify import API, DISMISS, applied_label, dismiss_markup, fill_contacts, ready_answers
 
 
 def _call(method: str, payload: dict, timeout: int = 30) -> dict:
@@ -31,7 +31,10 @@ def _handle(callback: dict, chat: str) -> None:
     if str(chat_id) != chat:
         return
     target = {"chat_id": chat_id, "message_id": message["message_id"]}
-    if data == "dismiss":
+    if data.startswith("dismiss"):
+        vacancy_id = data.partition(":")[2]
+        if vacancy_id:
+            store.mark_dismissed(store.connect(), vacancy_id)
         if not _call("deleteMessage", target).get("ok"):
             _call("editMessageText", {**target, "text": "✕ убрано"})
     elif data.startswith("applied:"):
@@ -39,7 +42,7 @@ def _handle(callback: dict, chat: str) -> None:
         text = message.get("text") or ""
         if not text.startswith("✅"):
             _call("editMessageText", {**target, "text": applied_label(True) + "\n" + text,
-                                       "disable_web_page_preview": True, "reply_markup": DISMISS})
+                                       "disable_web_page_preview": True, "reply_markup": dismiss_markup(data[len("applied:"):])})
 
 
 def _vacancy_id(card: dict) -> str | None:
