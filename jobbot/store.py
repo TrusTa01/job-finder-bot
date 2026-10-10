@@ -29,7 +29,7 @@ def connect() -> sqlite3.Connection:
     db = sqlite3.connect(DB_PATH)
     db.row_factory = sqlite3.Row
     db.executescript(SCHEMA)
-    for column in ("stack TEXT", "applied_at INTEGER", "snippet TEXT", "has_test INTEGER", "dismissed_at INTEGER"):  # migrations for databases created before these columns
+    for column in ("stack TEXT", "applied_at INTEGER", "snippet TEXT", "has_test INTEGER", "dismissed_at INTEGER", "message_id INTEGER"):  # migrations for databases created before these columns
         try:
             db.execute(f"ALTER TABLE vacancies ADD COLUMN {column}")
             db.commit()
@@ -69,8 +69,11 @@ def save_vacancy(db: sqlite3.Connection, v: dict, status: str, priority: str = "
     db.commit()
 
 
-def mark_notified(db: sqlite3.Connection, vacancy_id: str) -> None:
-    db.execute("UPDATE vacancies SET status='notified', notified_at=? WHERE id=?", (int(time.time()), vacancy_id))
+def mark_notified(db: sqlite3.Connection, vacancy_id: str, message_id: int | None = None) -> None:
+    db.execute(
+        "UPDATE vacancies SET status='notified', notified_at=?, message_id=? WHERE id=?",
+        (int(time.time()), message_id, vacancy_id),
+    )
     db.commit()
 
 

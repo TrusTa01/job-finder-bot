@@ -42,10 +42,8 @@ def _handle(callback: dict, chat: str) -> None:
             _call("editMessageText", {**target, "text": "✕ убрано"})
     elif data.startswith("applied:"):
         store.mark_applied(store.connect(), data[len("applied:"):])
-        text = message.get("text") or ""
-        if not text.startswith("✅"):
-            _call("editMessageText", {**target, "text": applied_label(True) + "\n" + text,
-                                       "disable_web_page_preview": True, "reply_markup": dismiss_markup(data[len("applied:"):])})
+        if not _call("deleteMessage", target).get("ok"):  # older than 48 hours: keep a short mark instead
+            _call("editMessageText", {**target, "text": applied_label(True), "reply_markup": {"inline_keyboard": []}})
 
 
 def _vacancy_id(card: dict) -> str | None:

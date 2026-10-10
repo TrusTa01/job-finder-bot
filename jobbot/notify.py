@@ -14,7 +14,7 @@ DISMISS = {"inline_keyboard": [[{"text": "✕", "callback_data": "dismiss"}]]}  
 
 def dismiss_button(vacancy_id: str | None) -> dict:
     """The ✕ button; with a vacancy id the listener also records the dismissal in the database."""
-    return {"text": "✕", "callback_data": f"dismiss:{vacancy_id}" if vacancy_id else "dismiss"}
+    return {"text": "неинтересно ✕", "callback_data": f"dismiss:{vacancy_id}" if vacancy_id else "dismiss"}
 
 
 def dismiss_markup(vacancy_id: str | None) -> dict:
@@ -36,8 +36,28 @@ def _keyboard(vacancy_id: str | None) -> dict:
     return {"inline_keyboard": [[{"text": applied_label(False), "callback_data": f"applied:{vacancy_id}"}, dismiss_button(vacancy_id)]]}
 
 
+def call_api(method: str, payload: dict) -> dict:
+    """Plain Telegram method call (for edits and deletes). Never logs the URL (it contains the bot token)."""
+    token = settings.get("TELEGRAM_BOT_TOKEN")
+    proxy = settings.telegram_proxy()
+    proxies = {"https": proxy, "http": proxy} if proxy else None
+    try:
+        return requests.post(API.format(token=token, method=method), json=payload, proxies=proxies, timeout=30).json()
+    except (requests.RequestException, ValueError):
+        return {}
+
+
 def send(text: str, vacancy_id: str | None = None) -> bool:
     """Send plain text. Returns True on success. Never logs the URL (it contains the bot token)."""
+    return send_card(text, vacancy_id) is not None
+
+
+def send_card(text: str, vacancy_id: str | None = None) -> int | None:
+    """Send a report. Returns the id of its first message (to delete or replace it later), or None on failure."""
+    token, chat = settings.get("TELEGRAM_BOT_TOKEN"), settings.get("TELEGRAM_CHAT_ID")
+    proxy = settings.telegram_proxy()
+    proxies = {"https": proxy, "http": proxy} if proxy else None
+    first_id = None
     token, chat = settings.get("TELEGRAM_BOT_TOKEN"), settings.get("TELEGRAM_CHAT_ID")
     proxy = settings.telegram_proxy()
     proxies = {"https": proxy, "http": proxy} if proxy else None
@@ -52,6 +72,8 @@ def send(text: str, vacancy_id: str | None = None) -> bool:
                     timeout=30,
                 )
                 if r.status_code == 200:
+                    if first_id is None:
+                        first_id = r.json()["result"]["message_id"]
                     break
                 error = f"HTTP {r.status_code}"
                 if r.status_code == 429:  # flood control: wait as long as Telegram asks
@@ -64,10 +86,10 @@ def send(text: str, vacancy_id: str | None = None) -> bool:
                 error = type(e).__name__
             if attempt == 1:
                 print(f"! telegram send failed: {error}")
-                return False
+                return None
             time.sleep(2)
         time.sleep(1.1)  # stay under Telegram's per-chat rate limit when sending a batch
-    return True
+    return first_id
 
 
 def format_telegram_post(row) -> str:

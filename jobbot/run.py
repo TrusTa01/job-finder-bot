@@ -29,9 +29,10 @@ def main() -> None:
     if not args.no_notify:
         # Retry reports that failed earlier (for example while the proxy was down), oldest first
         for row in db.execute("SELECT * FROM vacancies WHERE status='ready' ORDER BY first_seen").fetchall():
-            if not notify.send(notify.format_vacancy(row), row["id"]):
+            message_id = notify.send_card(notify.format_vacancy(row), row["id"])
+            if message_id is None:
                 break  # Telegram is unreachable, try again next run
-            store.mark_notified(db, row["id"])
+            store.mark_notified(db, row["id"], message_id)
             resent += 1
 
     known = store.known_ids(db)
@@ -102,8 +103,9 @@ def main() -> None:
         stats["ready"] += 1
         if not args.no_notify:
             row = db.execute("SELECT * FROM vacancies WHERE id=?", (v["id"],)).fetchone()
-            if notify.send(notify.format_vacancy(row), v["id"]):
-                store.mark_notified(db, v["id"])
+            message_id = notify.send_card(notify.format_vacancy(row), v["id"])
+            if message_id is not None:
+                store.mark_notified(db, v["id"], message_id)
                 stats["sent"] += 1
     hh.save_cache(cache)
 

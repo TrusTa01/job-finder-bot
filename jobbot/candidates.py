@@ -36,7 +36,8 @@ def handle(db, profile: str, entry: dict, description: str, direct_message: bool
         stack=decision.get("stack"), letter=letter, snippet=snippet,
     )
     row = db.execute("SELECT * FROM vacancies WHERE id=?", (entry["id"],)).fetchone()
-    if notify.send(notify.format_vacancy(row), entry["id"]):
-        store.mark_notified(db, entry["id"])
+    message_id = notify.send_card(notify.format_vacancy(row), entry["id"])
+    if message_id is not None:
+        store.mark_notified(db, entry["id"], message_id)
         return SENT
     return SAVED
