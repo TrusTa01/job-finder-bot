@@ -4,7 +4,7 @@ import time
 import requests
 
 from . import settings
-from .filters import resume_checklist
+from .filters import CFG, resume_checklist
 
 API = "https://api.telegram.org/bot{token}/{method}"
 LIMIT = 4000  # Telegram caps a message at 4096 characters
@@ -65,6 +65,25 @@ def format_telegram_post(row) -> str:
     return "\n".join(lines) + resume_checklist(row)
 
 
+def form_answers(row) -> str:
+    """Warning and ready-to-copy basic answers for vacancies whose response has a questionnaire."""
+    if not row["has_test"]:
+        return ""
+    ans = CFG.get("form_answers") or {}
+    phone, telegram = settings.get("APPLY_PHONE"), settings.get("APPLY_TELEGRAM")
+    pairs = [
+        ("Желаемая оплата", ans.get("salary")),
+        ("Город", ans.get("city")),
+        ("Опыт Flutter Android/iOS", ans.get("mobile_experience")),
+        ("Опыт Flutter Web", ans.get("web_experience")),
+        ("Telegram", "@" + telegram.lstrip("@") if telegram else ""),
+        ("Телефон", phone),
+        ("WhatsApp", "можно писать на " + phone if phone else ""),
+    ]
+    lines = [f"{k}: {v}" for k, v in pairs if v]
+    return "\n\n⚠ При отклике будет анкета. Базовые ответы для копирования:\n" + "\n".join(lines)
+
+
 def format_vacancy(row) -> str:
     if str(row["id"]).startswith("tg:"):
         return format_telegram_post(row)
@@ -81,4 +100,4 @@ def format_vacancy(row) -> str:
     if row["letter"]:
         lines += ["", "Письмо:", row["letter"]]
     lines += ["", row["url"]]
-    return "\n".join(lines) + resume_checklist(row)
+    return "\n".join(lines) + resume_checklist(row) + form_answers(row)

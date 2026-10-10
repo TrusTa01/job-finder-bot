@@ -29,7 +29,7 @@ def connect() -> sqlite3.Connection:
     db = sqlite3.connect(DB_PATH)
     db.row_factory = sqlite3.Row
     db.executescript(SCHEMA)
-    for column in ("stack TEXT", "applied_at INTEGER", "snippet TEXT"):  # migrations for databases created before these columns
+    for column in ("stack TEXT", "applied_at INTEGER", "snippet TEXT", "has_test INTEGER"):  # migrations for databases created before these columns
         try:
             db.execute(f"ALTER TABLE vacancies ADD COLUMN {column}")
             db.commit()
@@ -61,6 +61,7 @@ def save_vacancy(db: sqlite3.Connection, v: dict, status: str, priority: str = "
         "stack": extra.get("stack"),
         "letter": extra.get("letter"),
         "snippet": extra.get("snippet"),
+        "has_test": 1 if v.get("has_test") else 0,
     }
     cols = ", ".join(row)
     marks = ", ".join(f":{k}" for k in row)
