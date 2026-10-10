@@ -39,7 +39,7 @@ def _handle(callback: dict, chat: str) -> None:
         if vacancy_id:
             store.mark_dismissed(store.connect(), vacancy_id)
         if not _call("deleteMessage", target).get("ok"):
-            _call("editMessageText", {**target, "text": "✕ убрано"})
+            _call("editMessageText", {**target, "text": "❌ убрано"})
     elif data.startswith("applied:"):
         store.mark_applied(store.connect(), data[len("applied:"):])
         if not _call("deleteMessage", target).get("ok"):  # older than 48 hours: keep a short mark instead
