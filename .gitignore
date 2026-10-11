@@ -63,3 +63,7 @@ data/
 
 # ------- Other -------
 scripts/**/*.local.*
+
+# Per-copy secrets (second person, other copies): never commit
+.env*
+!.env.example
