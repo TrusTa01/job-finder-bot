@@ -1,11 +1,21 @@
 """Shared step for the secondary sources (Habr, GetMatch, Telegram channels):
 LLM screening, a draft letter, storage and the Telegram report. hh.ru has its own loop in run.py.
 """
+import re
+
 from . import llm, notify, store
 from .filters import CFG, priority_after_screen
 from .settings import PROFILE_PATH
 
 SENT, DROPPED, SAVED, RETRY, BUDGET = "sent", "dropped", "saved", "retry", "budget"
+OFFICE = re.compile("на месте|в офисе|офисн|очно|гибрид", re.I)
+REMOTE = re.compile("удал|remote|из дома", re.I)
+
+
+def onsite_only(entry: dict, description: str) -> bool:
+    """Office or hybrid work and no mention of remote work: not for us, whatever the source (hh filters by format itself)."""
+    text = " ".join([(entry.get("area") or {}).get("name", ""), entry.get("name") or "", description or ""])
+    return bool(OFFICE.search(text)) and not REMOTE.search(text)
 
 
 def load_profile() -> str | None:
@@ -18,6 +28,8 @@ def handle(db, profile: str, entry: dict, description: str, direct_message: bool
     Returns SENT (reported), SAVED (stored, delivery retried by run.py), DROPPED (does not fit),
     RETRY (the model failed, nothing stored) or BUDGET (daily LLM budget reached, nothing done).
     """
+    if onsite_only(entry, description):
+        return DROPPED  # before any LLM call, so it costs nothing
     if store.spend_last_day(db) >= CFG["limits"].get("daily_llm_budget_usd", 0.25):
         return BUDGET
     try:
