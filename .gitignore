@@ -37,12 +37,14 @@ Thumbs.db
 
 # ------- Secrets -------
 .env
+.env*
 .env.*
 !.env.example
 !**/*.example
 *.pem
 *.key
 config.yaml
+config*.yaml
 config.json
 tokens.json
 cookies*.json
@@ -63,7 +65,3 @@ data/
 
 # ------- Other -------
 scripts/**/*.local.*
-
-# Per-copy secrets (second person, other copies): never commit
-.env*
-!.env.example
