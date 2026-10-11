@@ -59,7 +59,7 @@ def main() -> None:
 
     new = sorted((v for v in found.values() if v["id"] not in known), key=lambda v: v["published_at"], reverse=True)
     cache = hh.load_cache()
-    stats = {"found": len(found), "new": len(new), "filtered": 0, "screened_out": 0, "ready": 0, "sent": 0, "resent": resent, "errors": 0, "hh_errors": 0}
+    stats = {"found": len(found), "new": len(new), "filtered": 0, "screened_out": 0, "duplicate": 0, "ready": 0, "sent": 0, "resent": resent, "errors": 0, "hh_errors": 0}
     processed = 0
     for v in new:
         verdict = evaluate(v)
@@ -89,6 +89,12 @@ def main() -> None:
         except RuntimeError:
             stats["hh_errors"] += 1
             continue
+        desc_hash = store.description_hash(description)
+        original = store.find_repost(db, desc_hash, v.get("alternate_url"))
+        if original:
+            store.save_vacancy(db, v, "duplicate", desc_hash=desc_hash, reason=f"репост {original}")
+            stats["duplicate"] += 1
+            continue
         try:
             decision, usage = llm.screen(profile, v, description)
             store.log_usage(db, *usage)
@@ -97,7 +103,7 @@ def main() -> None:
             if fit == "no":
                 store.save_vacancy(
                     db, v, "screened_out", verdict.priority, fit=fit, reason=decision.get("reason"),
-                    stack=decision.get("stack"),
+                    stack=decision.get("stack"), desc_hash=desc_hash,
                 )
                 stats["screened_out"] += 1
                 continue
@@ -108,7 +114,7 @@ def main() -> None:
             continue
         store.save_vacancy(
             db, v, "ready", priority_after_screen(fit, decision.get("required_grade"), issue), fit=fit, reason=decision.get("reason"),
-            issue=issue, grade=decision.get("required_grade"), stack=decision.get("stack"), letter=letter,
+            issue=issue, grade=decision.get("required_grade"), stack=decision.get("stack"), letter=letter, desc_hash=desc_hash,
         )
         stats["ready"] += 1
         if not args.no_notify:

@@ -30,6 +30,11 @@ def handle(db, profile: str, entry: dict, description: str, direct_message: bool
     """
     if onsite_only(entry, description):
         return DROPPED  # before any LLM call, so it costs nothing
+    desc_hash = store.description_hash(description)
+    original = store.find_repost(db, desc_hash, entry.get("alternate_url"))
+    if original:
+        store.save_vacancy(db, entry, "duplicate", desc_hash=desc_hash, reason=f"репост {original}")
+        return DROPPED  # the same text already came from another site, before any LLM call
     if store.spend_last_day(db) >= CFG["limits"].get("daily_llm_budget_usd", 0.25):
         return BUDGET
     try:
@@ -37,7 +42,7 @@ def handle(db, profile: str, entry: dict, description: str, direct_message: bool
         store.log_usage(db, *usage)
         fit, issue = decision.get("fit", "no"), decision.get("location_or_schedule_issue", "")
         if fit == "no":
-            store.save_vacancy(db, entry, "screened_out", fit=fit, reason=decision.get("reason"), stack=decision.get("stack"))
+            store.save_vacancy(db, entry, "screened_out", fit=fit, reason=decision.get("reason"), stack=decision.get("stack"), desc_hash=desc_hash)
             return DROPPED
         letter, usage = llm.write_letter(profile, entry, description, issue, direct_message=direct_message)
         store.log_usage(db, *usage)
@@ -45,7 +50,7 @@ def handle(db, profile: str, entry: dict, description: str, direct_message: bool
         return RETRY  # not saved, so the next check retries it
     store.save_vacancy(
         db, entry, "ready", priority_after_screen(fit, decision.get("required_grade"), issue), fit=fit, reason=decision.get("reason"), issue=issue,
-        stack=decision.get("stack"), letter=letter, snippet=snippet,
+        stack=decision.get("stack"), letter=letter, snippet=snippet, desc_hash=desc_hash,
     )
     row = db.execute("SELECT * FROM vacancies WHERE id=?", (entry["id"],)).fetchone()
     message_id = notify.send_card(notify.format_vacancy(row), entry["id"])

@@ -1,6 +1,9 @@
 """SQLite state: which vacancies were seen, what the LLM decided, what was sent, what it cost."""
+import hashlib
+import re
 import sqlite3
 import time
+from urllib.parse import urlparse
 
 from .settings import DATA_DIR, DB_PATH
 
@@ -29,7 +32,7 @@ def connect() -> sqlite3.Connection:
     db = sqlite3.connect(DB_PATH)
     db.row_factory = sqlite3.Row
     db.executescript(SCHEMA)
-    for column in ("stack TEXT", "applied_at INTEGER", "snippet TEXT", "has_test INTEGER", "dismissed_at INTEGER", "message_id INTEGER"):  # migrations for databases created before these columns
+    for column in ("stack TEXT", "applied_at INTEGER", "snippet TEXT", "has_test INTEGER", "dismissed_at INTEGER", "message_id INTEGER", "desc_hash TEXT"):  # migrations for databases created before these columns
         try:
             db.execute(f"ALTER TABLE vacancies ADD COLUMN {column}")
             db.commit()
@@ -40,6 +43,27 @@ def connect() -> sqlite3.Connection:
 
 def known_ids(db: sqlite3.Connection) -> set[str]:
     return {r["id"] for r in db.execute("SELECT id FROM vacancies")}
+
+
+def description_hash(text: str | None) -> str | None:
+    """Fingerprint of the vacancy text: the same post on two sites gives the same value. Short texts are too generic to compare."""
+    norm = re.sub(r"\W+", " ", (text or "").lower()).strip()
+    return hashlib.sha1(norm.encode("utf-8")).hexdigest() if len(norm) >= 200 else None
+
+
+def _host(url: str | None) -> str:
+    return urlparse(url or "").netloc.lower().removeprefix("www.")
+
+
+def find_repost(db: sqlite3.Connection, desc_hash: str | None, url: str | None) -> str | None:
+    """Id of a stored vacancy with the same text from another site. The same site is not a repost: hh shows
+    one job with different employment types as separate vacancies, and both are kept on purpose."""
+    if not desc_hash:
+        return None
+    for row in db.execute("SELECT id, url FROM vacancies WHERE desc_hash=?", (desc_hash,)):
+        if _host(row["url"]) != _host(url):
+            return row["id"]
+    return None
 
 
 def save_vacancy(db: sqlite3.Connection, v: dict, status: str, priority: str = "low", **extra) -> None:
@@ -62,6 +86,7 @@ def save_vacancy(db: sqlite3.Connection, v: dict, status: str, priority: str = "
         "letter": extra.get("letter"),
         "snippet": extra.get("snippet"),
         "has_test": 1 if v.get("has_test") else 0,
+        "desc_hash": extra.get("desc_hash"),
     }
     cols = ", ".join(row)
     marks = ", ".join(f":{k}" for k in row)
