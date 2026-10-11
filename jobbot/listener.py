@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 
 import requests
 
-from . import candidates, getmatch, habr, hh, llm, settings, stats, store, tgchannels
+from . import candidates, getmatch, habr, hh, llm, notify, settings, stats, store, tgchannels
 from .filters import CFG
 from .settings import ROOT
 from .notify import API, DISMISS, applied_label, dismiss_markup, fill_contacts, ready_answers
@@ -97,9 +97,10 @@ def _send_help(chat) -> None:
 
 def _handle_message(message: dict, chat: str) -> None:
     """Answer /help and /start, or employer questions pasted as a reply to a vacancy card."""
-    command = (message.get("text") or "").split("@")[0].strip()
-    if str(message["chat"]["id"]) == chat and command in ("/help", "/start", "/stop", "/stats", "/rebuild", *stats.KINDS):
-        return _command(message, command, chat)
+    words = (message.get("text") or "").split()
+    command = words[0].split("@")[0] if words else ""
+    if str(message["chat"]["id"]) == chat and command in ("/help", "/start", "/stop", "/stats", "/rebuild", "/restore", *stats.KINDS):
+        return _command(message, command, chat, words[1:])
     card, question = message.get("reply_to_message"), (message.get("text") or "").strip()
     if str(message["chat"]["id"]) != chat or not card or not question or not (card.get("from") or {}).get("is_bot"):
         return
@@ -135,7 +136,7 @@ def _report_failure(update: dict, chat: str) -> None:
         pass
 
 
-def _command(message: dict, command: str, chat: str) -> None:
+def _command(message: dict, command: str, chat: str, args: list[str] | None = None) -> None:
     """Chat commands: help and start/stop of the search, the monthly figures and the hand-reported outcomes."""
     db = store.connect()
     if command in ("/help", "/start"):
@@ -153,9 +154,35 @@ def _command(message: dict, command: str, chat: str) -> None:
         _reply(message, stats.summary(db, now.year, now.month))
     elif command == "/rebuild":
         _start_rebuild(message)
+    elif command == "/restore":
+        _restore(message, args or [])
     else:  # an outcome: /interview or /offer
         stats.add(db, stats.KINDS[command], int(time.time()))
         _reply(message, f"Записал: {stats.KINDS[command]}.")
+
+
+def _restore(message: dict, args: list[str]) -> None:
+    """/restore N: send back the last N cards the user dismissed with ❌ (N defaults to 1, at most 20)."""
+    try:
+        count = int(args[0]) if args else 1
+    except ValueError:
+        return _reply(message, "Напишите число: /restore 3 вернёт три последние убранные карточки.")
+    if not 1 <= count <= 20:
+        return _reply(message, "Можно вернуть от 1 до 20 карточек.")
+    db = store.connect()
+    rows = db.execute("SELECT id FROM vacancies WHERE status='dismissed' ORDER BY dismissed_at DESC LIMIT ?", (count,)).fetchall()
+    if not rows:
+        return _reply(message, "Нечего возвращать: убранных карточек нет.")
+    done = 0
+    for (vacancy_id,) in rows:
+        db.execute("UPDATE vacancies SET status='notified', dismissed_at=NULL WHERE id=?", (vacancy_id,))
+        db.commit()
+        fresh = db.execute("SELECT * FROM vacancies WHERE id=?", (vacancy_id,)).fetchone()
+        message_id = notify.send_card("ВОЗВРАЩЕНО: карточка была убрана ранее\n\n" + notify.format_vacancy(fresh), vacancy_id)
+        if message_id is not None:
+            store.mark_notified(db, vacancy_id, message_id)
+            done += 1
+    _reply(message, f"Вернул карточек: {done} из {len(rows)}.")
 
 
 def _start_rebuild(message: dict) -> None:
@@ -182,6 +209,7 @@ MENU = [
     ("interview", "Записать собеседование"),
     ("offer", "Записать оффер"),
     ("rebuild", "Написать письма заново для открытых вакансий"),
+    ("restore", "Вернуть последние убранные карточки: /restore 3"),
     ("help", "Инструкция"),
 ]
 
