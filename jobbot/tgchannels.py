@@ -38,7 +38,7 @@ def add_channel(db, name: str) -> str:
         return "Имя канала: только латинские буквы, цифры и _, от 5 символов. Пример: /addchannel some_job_channel"
     if name in channels(db):
         return f"@{name} уже в списке."
-    if not _fetch(name):
+    if "tgme_widget_message" not in _fetch(name):  # a real public channel shows its posts on the preview page
         return f"@{name} не открывается как публичный канал. Проверьте имя."
     extra = [c for c in store.get_meta(db, "extra_channels", "").split(",") if c] + [name]
     store.set_meta(db, "extra_channels", ",".join(extra))
