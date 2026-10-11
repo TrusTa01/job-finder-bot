@@ -105,7 +105,7 @@ def format_telegram_post(row) -> str:
     return "\n".join(lines) + resume_checklist(row)
 
 
-CONTACT_TOKENS = {"[TELEGRAM]": "telegram", "[PHONE]": "phone", "[WHATSAPP]": "whatsapp"}
+CONTACT_TOKENS = {"[TELEGRAM]": "telegram", "[PHONE]": "phone", "[WHATSAPP]": "whatsapp", "[EMAIL]": "email"}
 
 
 def contacts() -> dict:
@@ -114,6 +114,7 @@ def contacts() -> dict:
         "telegram": "@" + telegram.lstrip("@") if telegram else "",
         "phone": phone,
         "whatsapp": phone,
+        "email": settings.get("APPLY_EMAIL"),
     }
 
 
@@ -131,6 +132,7 @@ def ready_answers(mask: bool = False) -> str:
         ("Telegram", shown["[TELEGRAM]"]),
         ("Телефон", shown["[PHONE]"]),
         ("WhatsApp (можно писать)", shown["[WHATSAPP]"]),
+        ("Почта", shown["[EMAIL]"]),
     ]
     return chr(10).join(f"{k}: {v}" for k, v in pairs if v)
 
