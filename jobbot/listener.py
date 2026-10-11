@@ -95,12 +95,18 @@ def _send_help(chat) -> None:
     _call("sendMessage", {"chat_id": chat, "text": text, "disable_web_page_preview": True, "reply_markup": DISMISS})
 
 
+def _delete_message(message: dict) -> None:
+    """Commands are not kept in the chat: once handled, the bot removes the user's message (allowed for private chats, within 48 hours)."""
+    _call("deleteMessage", {"chat_id": message["chat"]["id"], "message_id": message["message_id"]})
+
+
 def _handle_message(message: dict, chat: str) -> None:
     """Answer /help and /start, or employer questions pasted as a reply to a vacancy card."""
     words = (message.get("text") or "").split()
     command = words[0].split("@")[0] if words else ""
     if str(message["chat"]["id"]) == chat and command in ("/help", "/start", "/stop", "/stats", "/rebuild", "/restore", *stats.KINDS):
-        return _command(message, command, chat, words[1:])
+        _command(message, command, chat, words[1:])
+        return _delete_message(message)
     card, question = message.get("reply_to_message"), (message.get("text") or "").strip()
     if str(message["chat"]["id"]) != chat or not card or not question or not (card.get("from") or {}).get("is_bot"):
         return
