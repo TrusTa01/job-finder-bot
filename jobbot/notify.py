@@ -14,7 +14,7 @@ DISMISS = {"inline_keyboard": [[{"text": "❌", "callback_data": "dismiss"}]]}  
 
 def dismiss_button(vacancy_id: str | None) -> dict:
     """The ✕ button; with a vacancy id the listener also records the dismissal in the database."""
-    return {"text": "неинтересно ❌", "callback_data": f"dismiss:{vacancy_id}" if vacancy_id else "dismiss"}
+    return {"text": "Неинтересно ❌", "callback_data": f"dismiss:{vacancy_id}" if vacancy_id else "dismiss"}
 
 
 def dismiss_markup(vacancy_id: str | None) -> dict:
