@@ -57,8 +57,10 @@ def _vacancy_id(card: dict) -> str | None:
 
 
 def _reply(message: dict, text: str, parse_mode: str | None = None) -> None:
-    payload = {"chat_id": message["chat"]["id"], "text": text[:4000], "reply_to_message_id": message["message_id"],
-               "allow_sending_without_reply": True, "disable_web_page_preview": True, "reply_markup": DISMISS}
+    payload = {"chat_id": message["chat"]["id"], "text": text[:4000],
+               "disable_web_page_preview": True, "reply_markup": DISMISS}
+    if not (message.get("text") or "").startswith("/"):  # a command message is removed once handled, so it is not quoted
+        payload.update({"reply_to_message_id": message["message_id"], "allow_sending_without_reply": True})
     if parse_mode:
         payload["parse_mode"] = parse_mode
     _call("sendMessage", payload)
@@ -184,7 +186,7 @@ def _restore(message: dict, args: list[str]) -> None:
         db.execute("UPDATE vacancies SET status='notified', dismissed_at=NULL WHERE id=?", (vacancy_id,))
         db.commit()
         fresh = db.execute("SELECT * FROM vacancies WHERE id=?", (vacancy_id,)).fetchone()
-        message_id = notify.send_card("ВОЗВРАЩЕНО: карточка была убрана ранее\n\n" + notify.format_vacancy(fresh), vacancy_id)
+        message_id = notify.send_card("ВОЗВРАЩЕНО: карточка снова в работе\n\n" + notify.format_vacancy(fresh), vacancy_id)
         if message_id is not None:
             store.mark_notified(db, vacancy_id, message_id)
             done += 1

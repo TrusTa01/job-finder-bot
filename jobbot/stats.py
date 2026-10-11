@@ -44,13 +44,13 @@ def summary(db, year: int, month: int, now: int | None = None) -> str:
         counts[kind] = n
     rejected = max(0, applied - waiting - counts["interview"] - counts["offer"])
     lines = [
-        f"Итоги за {MONTHS[month]} {year}",
+        f"Статистика за {MONTHS[month]} {year}",
         f"Откликов (✅): {applied}",
         f"Неинтересно (❌, не в счёт откликов): {dismissed}",
         f"Собеседований: {counts['interview']}",
         f"Офферов: {counts['offer']}",
-        f"Отказов (нет ответа больше {WAIT_DAYS} дней): {rejected}",
-        f"Ещё ждём ответа: {waiting}",
+        f"Без ответа больше {WAIT_DAYS} дней (считаются отказами): {rejected}",
+        f"Ещё ждём ответа (моложе {WAIT_DAYS} дней): {waiting}",
     ]
     return "\n".join(lines)
 
