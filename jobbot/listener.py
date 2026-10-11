@@ -106,7 +106,7 @@ def _handle_message(message: dict, chat: str) -> None:
     """Answer /help and /start, or employer questions pasted as a reply to a vacancy card."""
     words = (message.get("text") or "").split()
     command = words[0].split("@")[0] if words else ""
-    if str(message["chat"]["id"]) == chat and command in ("/help", "/start", "/stop", "/stats", "/stats_month", "/stats_year", "/stats_all", "/rebuild", "/restore", *stats.KINDS):
+    if str(message["chat"]["id"]) == chat and command in ("/help", "/start", "/stop", "/stats", "/stats_month", "/stats_year", "/stats_all", "/rebuild", "/restore", "/channels", "/addchannel", *stats.KINDS):
         _command(message, command, chat, words[1:])
         return _delete_message(message)
     card, question = message.get("reply_to_message"), (message.get("text") or "").strip()
@@ -168,6 +168,10 @@ def _command(message: dict, command: str, chat: str, args: list[str] | None = No
         _start_rebuild(message)
     elif command == "/restore":
         _restore(message, args or [])
+    elif command == "/channels":
+        _reply(message, "Каналы, которые проверяет бот:" + chr(10) + chr(10).join("@" + c for c in tgchannels.channels(db)))
+    elif command == "/addchannel":
+        _reply(message, tgchannels.add_channel(db, " ".join(args or [])))
     else:  # an outcome: /interview or /offer
         stats.add(db, stats.KINDS[command], int(time.time()))
         _reply(message, f"Записал: {stats.KINDS[command]}.")
@@ -223,6 +227,8 @@ MENU = [
     ("offer", "Записать оффер"),
     ("rebuild", "Написать письма заново для открытых вакансий"),
     ("restore", "Вернуть последние убранные карточки: /restore 3"),
+    ("channels", "Каналы, которые проверяет бот"),
+    ("addchannel", "Добавить канал: /addchannel имя"),
     ("help", "Инструкция"),
 ]
 

@@ -25,6 +25,25 @@ CV_POST = re.compile(r"#ищу|#резюме|#cv\b|ищу работу", re.I)
 POST = re.compile(r'data-post="([^"]+)".*?(?=data-post="|\Z)', re.S)
 
 
+def channels(db) -> tuple:
+    """Channels from config.yaml plus the ones added in the chat with /addchannel (kept in the meta table)."""
+    extra = [c for c in store.get_meta(db, "extra_channels", "").split(",") if c]
+    return tuple(dict.fromkeys([*CHANNELS, *extra]))
+
+
+def add_channel(db, name: str) -> str:
+    """Check a public channel and remember it. Returns a short answer for the chat."""
+    name = name.strip().lstrip("@").removeprefix("https://t.me/").removeprefix("t.me/").strip("/")
+    if not re.fullmatch("[A-Za-z0-9_]{5,32}", name):
+        return "Имя канала: только латинские буквы, цифры и _, от 5 символов. Пример: /addchannel some_job_channel"
+    if name in channels(db):
+        return f"@{name} уже в списке."
+    if not _fetch(name):
+        return f"@{name} не открывается как публичный канал. Проверьте имя."
+    extra = [c for c in store.get_meta(db, "extra_channels", "").split(",") if c] + [name]
+    store.set_meta(db, "extra_channels", ",".join(extra))
+    return f"Канал @{name} добавлен. Проверка по нему начнётся со следующего прохода."
+
 def _fetch(channel: str) -> str:
     proxy = settings.telegram_proxy()
     proxies = {"http": proxy, "https": proxy} if proxy else None
@@ -80,7 +99,7 @@ def check(db, send: bool = True) -> int:
 
     known = store.known_ids(db)
     reported = 0
-    for channel in CHANNELS:
+    for channel in channels(db):
         for p in _posts(_fetch(channel)):
             key = f"tg:{p['post']}"
             if key in known or not _fresh(p["date"]) or not _relevant(p["text"]):
