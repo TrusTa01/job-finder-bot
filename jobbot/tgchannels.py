@@ -87,6 +87,15 @@ def _fresh(date: str) -> bool:
         return True
 
 
+OFFICE = re.compile("на месте|в офисе|офисн|очно|на месте работодателя", re.I)
+REMOTE = re.compile("удал|remote|из дома", re.I)
+
+
+def _onsite_only(text: str) -> bool:
+    """A post that asks for presence in an office and never mentions remote work is not for us (the LLM does not check the format)."""
+    return bool(OFFICE.search(text)) and not REMOTE.search(text)
+
+
 def check(db, send: bool = True) -> int:
     """Screen new relevant posts, write a personal message for each fitting one and report it. Returns how many were reported."""
     now = int(time.time())
@@ -102,7 +111,7 @@ def check(db, send: bool = True) -> int:
     for channel in channels(db):
         for p in _posts(_fetch(channel)):
             key = f"tg:{p['post']}"
-            if key in known or not _fresh(p["date"]) or not _relevant(p["text"]):
+            if key in known or not _fresh(p["date"]) or not _relevant(p["text"]) or _onsite_only(p["text"]):
                 continue
             lines = [ln.strip() for ln in p["text"].splitlines() if ln.strip() and not ln.strip().startswith("#")]
             entry = {
