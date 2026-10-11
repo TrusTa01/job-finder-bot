@@ -182,7 +182,6 @@ def _restore(message: dict, args: list[str]) -> None:
         if message_id is not None:
             store.mark_notified(db, vacancy_id, message_id)
             done += 1
-    _reply(message, f"Вернул карточек: {done} из {len(rows)}.")
 
 
 def _start_rebuild(message: dict) -> None:
