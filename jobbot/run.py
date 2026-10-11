@@ -30,7 +30,7 @@ def main() -> None:
     month_key = f"{now.year}-{now.month:02d}"
     if now.day == 1 and store.get_meta(db, "monthly_sent", "") != month_key:  # monthly figures, once
         if not args.no_notify:
-            notify.send(stats.summary(db, *stats.previous_month(now)))
+            notify.send(stats.month(db, *stats.previous_month(now)))
         store.set_meta(db, "monthly_sent", month_key)
     if store.get_meta(db, "paused", "0") == "1":  # /stop in the chat; /start resumes
         print("paused: send /start in the chat to resume the search")

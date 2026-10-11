@@ -106,7 +106,7 @@ def _handle_message(message: dict, chat: str) -> None:
     """Answer /help and /start, or employer questions pasted as a reply to a vacancy card."""
     words = (message.get("text") or "").split()
     command = words[0].split("@")[0] if words else ""
-    if str(message["chat"]["id"]) == chat and command in ("/help", "/start", "/stop", "/stats", "/rebuild", "/restore", *stats.KINDS):
+    if str(message["chat"]["id"]) == chat and command in ("/help", "/start", "/stop", "/stats", "/stats_month", "/stats_year", "/stats_all", "/rebuild", "/restore", *stats.KINDS):
         _command(message, command, chat, words[1:])
         return _delete_message(message)
     card, question = message.get("reply_to_message"), (message.get("text") or "").strip()
@@ -157,9 +157,13 @@ def _command(message: dict, command: str, chat: str, args: list[str] | None = No
     elif command == "/stop":
         store.set_meta(db, "paused", "1")
         _reply(message, "Поиск остановлен: новые вакансии не ищутся и не присылаются. Команды работают. /start возобновит поиск.")
-    elif command == "/stats":
+    elif command in ("/stats", "/stats_month"):
         now = datetime.now(timezone.utc)
-        _reply(message, stats.summary(db, now.year, now.month))
+        _reply(message, stats.month(db, now.year, now.month))
+    elif command == "/stats_year":
+        _reply(message, stats.year_to_date(db, datetime.now(timezone.utc).year))
+    elif command == "/stats_all":
+        _reply(message, stats.all_time(db))
     elif command == "/rebuild":
         _start_rebuild(message)
     elif command == "/restore":
@@ -212,7 +216,9 @@ def _start_rebuild(message: dict) -> None:
 MENU = [
     ("start", "Как пользоваться и запустить поиск"),
     ("stop", "Остановить поиск"),
-    ("stats", "Итоги текущего месяца"),
+    ("stats_month", "Статистика за текущий месяц"),
+    ("stats_year", "Статистика за год"),
+    ("stats_all", "Статистика за всё время"),
     ("interview", "Записать собеседование"),
     ("offer", "Записать оффер"),
     ("rebuild", "Написать письма заново для открытых вакансий"),

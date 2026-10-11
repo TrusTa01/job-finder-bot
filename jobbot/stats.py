@@ -1,4 +1,4 @@
-"""Monthly counts for the search: applications (✅), not interesting (❌) and interviews and offers entered by hand.
+"""Search statistics: applications (✅), not interesting (❌), interviews and offers entered by hand.
 
 Interviews and offers are commands in the chat (/interview, /offer). A rejection is not entered by hand: an
 application older than WAIT_DAYS without an interview or an offer counts as rejected. Nothing here talks to hh.ru.
@@ -22,15 +22,15 @@ def add(db, kind: str, ts: int) -> None:
     db.commit()
 
 
-def _bounds(year: int, month: int) -> tuple[int, int]:
+def _month_bounds(year: int, month: int) -> tuple[int, int]:
     start = datetime(year, month, 1, tzinfo=timezone.utc)
     end = datetime(year + (month == 12), month % 12 + 1, 1, tzinfo=timezone.utc)
     return int(start.timestamp()), int(end.timestamp())
 
 
-def summary(db, year: int, month: int, now: int | None = None) -> str:
+def window(db, start: int, end: int, title: str, now: int | None = None) -> str:
+    """The summary for one period [start, end): the same figures for a month, a year or all time."""
     connect(db)
-    start, end = _bounds(year, month)
     cutoff = (now or int(time.time())) - WAIT_DAYS * 86400
     applied = db.execute("SELECT COUNT(*) FROM vacancies WHERE applied_at >= ? AND applied_at < ?", (start, end)).fetchone()[0]
     dismissed = db.execute(
@@ -44,7 +44,7 @@ def summary(db, year: int, month: int, now: int | None = None) -> str:
         counts[kind] = n
     rejected = max(0, applied - waiting - counts["interview"] - counts["offer"])
     lines = [
-        f"Статистика за {MONTHS[month]} {year}",
+        title,
         f"Откликов (✅): {applied}",
         f"Неинтересно (❌, не в счёт откликов): {dismissed}",
         f"Собеседований: {counts['interview']}",
@@ -53,6 +53,21 @@ def summary(db, year: int, month: int, now: int | None = None) -> str:
         f"Ещё ждём ответа (моложе {WAIT_DAYS} дней): {waiting}",
     ]
     return "\n".join(lines)
+
+
+def month(db, year: int, month: int, now: int | None = None) -> str:
+    start, end = _month_bounds(year, month)
+    return window(db, start, end, f"Статистика за {MONTHS[month]} {year}", now)
+
+
+def year_to_date(db, year: int, now: int | None = None) -> str:
+    start = int(datetime(year, 1, 1, tzinfo=timezone.utc).timestamp())
+    end = (now or int(time.time())) + 1
+    return window(db, start, end, f"Статистика за {year} год (с 1 января по сегодня)", now)
+
+
+def all_time(db, now: int | None = None) -> str:
+    return window(db, 0, (now or int(time.time())) + 1, "Статистика за всё время", now)
 
 
 def previous_month(now: datetime) -> tuple[int, int]:
