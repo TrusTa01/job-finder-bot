@@ -22,7 +22,7 @@ DEFAULTS = {
     "pitch_variants": {"studio": "contract", "outstaff": "contract", "agency": "later", "product": "staff"},
     "max_new_per_day": 10,        # new target cards per rolling 24 hours; cards the user snoozed come back on top of this
     "follow_up_days": 7,          # one reminder this many days after "Написал"
-    "later_days": 3,              # a card snoozed with "Позже" comes back after this many days
+    "later_days": 1,              # a card snoozed with "Позже" comes back after this many days
     "exclude_domains": [
         "hh.ru", "habr.com", "vc.ru", "t.me", "telegram.org", "github.com", "youtube.com", "vk.com", "linkedin.com",
         "facebook.com", "instagram.com", "twitter.com", "x.com", "wikipedia.org", "google.com", "yandex.ru", "ya.ru",
