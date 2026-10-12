@@ -7,6 +7,8 @@ import requests
 from . import settings
 from .filters import CFG, resume_checklist
 
+STACK_WORD = CFG.get("stack_word") or "стек"  # the word before the field on the card: стек for IT, сфера for others
+FORMAT_NAMES = {"REMOTE": "удалённо", "HYBRID": "гибрид", "ON_SITE": "офис"}
 STACK_LABELS = CFG.get("stack_labels") or {}  # config: stack value from the screening prompt -> label on the card
 FORM_LABELS = CFG.get("form_labels") or {}  # config: form_answers key -> question label in the card
 
@@ -108,7 +110,7 @@ def format_telegram_post(row) -> str:
     stack = STACK_LABELS.get(row["stack"], "")
     lines = [
         f"Telegram @{row['employer']}: {row['name']}",
-        f"Оценка: {row['fit']}" + (f" · стек: {stack}" if stack else ""),
+        f"Оценка: {row['fit']}" + (f" · {STACK_WORD}: {stack}" if stack else ""),
         f"{row['reason']}",
     ]
     if row["issue"]:
@@ -210,7 +212,8 @@ def format_vacancy(row) -> str:
     lines = [
         f"{row['name']}",
         f"{row['employer']} · {row['area']} · {row['experience']}",
-        f"Оценка: {row['fit']} ({priority})" + (f" · стек: {stack}" if stack else ""),
+        *([f"Формат: {', '.join(FORMAT_NAMES.get(x, x) for x in (row['work_format'] or '').split(',') if x)}"] if row['work_format'] else []),
+        f"Оценка: {row['fit']} ({priority})" + (f" · {STACK_WORD}: {stack}" if stack else ""),
         f"{row['reason']}",
     ]
     if row["issue"]:

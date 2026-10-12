@@ -5,6 +5,7 @@ Flutter in the title; the caller then fetches the full description and calls
 evaluate(vacancy, description) again.
 """
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -26,6 +27,10 @@ def words(key: str) -> tuple[str, ...]:
 _raw_formats = CFG.get("work_formats") or [CFG.get("required_work_format", "REMOTE")]
 WORK_FORMATS = [str(f).strip().upper() for f in (_raw_formats if isinstance(_raw_formats, list) else [_raw_formats])]
 _unknown = [f for f in WORK_FORMATS if f not in ("REMOTE", "HYBRID", "ON_SITE")]
+# Office and hybrid are taken only in these cities (config.yaml office_cities); remote always.
+OFFICE_CITIES = words("office_cities")
+REMOTE_RE = re.compile("удал|remote|из дома", re.I)
+OFFICE_RE = re.compile("на месте|в офисе|офисн|очно|гибрид", re.I)
 if _unknown:
     raise SystemExit(f"config.yaml work_formats: unknown value(s) {', '.join(_unknown)}; use REMOTE, HYBRID, ON_SITE")
 
@@ -54,6 +59,16 @@ def _switched(name: str) -> bool | None:
     except (OSError, ValueError, AttributeError):
         return None
     return value if isinstance(value, bool) else None
+
+
+def place_ok(formats: set, text: str) -> bool:
+    """Remote is always fine. Office or hybrid is fine only when the text names one of office_cities."""
+    if "REMOTE" in formats or REMOTE_RE.search(text):
+        return True
+    if not (formats & {"ON_SITE", "HYBRID"}) and not OFFICE_RE.search(text):
+        return True
+    low = text.lower()
+    return any(city in low for city in OFFICE_CITIES)
 
 
 def source_on(name: str) -> bool:
@@ -109,6 +124,8 @@ def evaluate(vacancy: dict, description: str | None = None) -> Verdict:
 
     if not any(f in formats for f in WORK_FORMATS):
         return Verdict(True, "low", "work format")
+    if not place_ok(formats, (vacancy.get("area") or {}).get("name", "")):
+        return Verdict(True, "low", "office outside the accepted cities")
 
     sen = CFG["seniority"]
     if _has(title, sen["skip"]) and not _has(title, sen["ok_markers"]):

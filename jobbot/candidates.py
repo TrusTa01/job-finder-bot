@@ -1,25 +1,17 @@
 """Shared step for the secondary sources (Habr, GetMatch, Telegram channels):
 LLM screening, a draft letter, storage and the Telegram report. hh.ru has its own loop in run.py.
 """
-import re
-
 from . import llm, notify, store
-from .filters import CFG, WORK_FORMATS, priority_after_screen
+from .filters import place_ok, priority_after_screen
 from .settings import PROFILE_PATH
 
 SENT, DROPPED, SAVED, RETRY, BUDGET = "sent", "dropped", "saved", "retry", "budget"
-# Each unaccepted format gets its words: office words unless ON_SITE is accepted, "гибрид" unless HYBRID is
-_office_words = ([] if "ON_SITE" in WORK_FORMATS else ["на месте", "в офисе", "офисн", r"\bочно"]) + ([] if "HYBRID" in WORK_FORMATS else ["гибрид"])
-OFFICE = re.compile("|".join(_office_words), re.I) if _office_words else None
-REMOTE = re.compile("удал|remote|из дома", re.I)
 
 
 def onsite_only(entry: dict, description: str) -> bool:
-    """Office or hybrid work and no mention of remote work: not for us, whatever the source. Only the formats missing from work_formats count."""
-    if OFFICE is None:
-        return False
+    """Office or hybrid outside office_cities, with no remote option: not for us, whatever the source."""
     text = " ".join([(entry.get("area") or {}).get("name", ""), entry.get("name") or "", description or ""])
-    return bool(OFFICE.search(text)) and not REMOTE.search(text)
+    return not place_ok(set(), text)
 
 
 def load_profile() -> str | None:
