@@ -56,10 +56,6 @@ def _handle(callback: dict, chat: str) -> None:
     elif data.startswith("hlp:"):
         for mid in data[len("hlp:"):].split(","):
             _call("deleteMessage", {"chat_id": chat_id, "message_id": int(mid)})
-    elif data == "hid:toggle":
-        db = store.connect()
-        outreach_conf.set_enabled(db, not outreach_conf.enabled(db))
-        _call("editMessageText", {**target, "text": _hidden_text(db), "reply_markup": _hidden_markup(db)})
     elif data == "src:close":
         if not _call("deleteMessage", target).get("ok"):  # older than 48 hours: keep a mark, but no buttons
             _call("editMessageText", {**target, "text": "Источники: меню закрыто.", "reply_markup": {"inline_keyboard": []}})
@@ -267,8 +263,10 @@ def _command(message: dict, command: str, chat: str, args: list[str] | None = No
         _reply(message, tgchannels.add_channel(db, " ".join(args or [])))
     elif command == "/switch":
         _send_switch(chat)
-    elif command == "/hidden" and not args:
-        _call("sendMessage", {"chat_id": chat, "text": _hidden_text(db), "reply_markup": _hidden_markup(db)})
+    elif command == "/hidden":
+        if args and args[0].lower() in ("on", "off"):
+            outreach_conf.set_enabled(db, args[0].lower() == "on")
+        _show_hidden(db, chat)
     elif command in HIDDEN_COMMANDS:
         _reply(message, _hidden_command(db, command, args or []))
     else:  # an outcome: /interview or /offer
@@ -377,16 +375,24 @@ def _start_rebuild(message: dict) -> None:
 
 
 def _hidden_text(db) -> str:
-    on = outreach_conf.enabled(db)
-    return ("Скрытый рынок" + chr(10) + ("Статус: Включён ✅" if on else "Статус: Выключен ❌") + chr(10) + chr(10)
-            + ("Бот ищет компании сам и присылает карточки с готовым сообщением." if on else "Поиск компаний и расходы остановлены."))
+    """The one window of /hidden: the state and the command that changes it."""
+    if outreach_conf.enabled(db):
+        return ("Скрытый рынок" + chr(10) + "Статус: Включён ✅" + chr(10) + chr(10)
+                + "Бот ищет компании сам и присылает карточки с готовым сообщением." + chr(10) + chr(10)
+                + "Выключить: /hidden off")
+    return ("Скрытый рынок" + chr(10) + "Статус: Выключен ❌" + chr(10) + chr(10)
+            + "Поиск компаний и расходы остановлены." + chr(10) + chr(10)
+            + "Включить: /hidden on")
 
 
-def _hidden_markup(db) -> dict:
-    """One toggle button and a close button. The toggle shows the action, the text shows the state."""
-    on = outreach_conf.enabled(db)
-    return {"inline_keyboard": [[{"text": "Выключить ❌" if on else "Включить ✅", "callback_data": "hid:toggle"}],
-                                [{"text": "Скрыть меню ❌", "callback_data": "src:close"}]]}
+def _show_hidden(db, chat: str) -> None:
+    """Replaces the previous /hidden window with a new one, so only the current state stays in the chat."""
+    old = store.get_meta(db, "hidden_window", "")
+    if old:
+        _call("deleteMessage", {"chat_id": chat, "message_id": int(old)})
+    sent = _call("sendMessage", {"chat_id": chat, "text": _hidden_text(db)})
+    if sent.get("ok"):
+        store.set_meta(db, "hidden_window", str(sent["result"]["message_id"]))
 
 
 SWITCH_LABELS = {"hh": "hh.ru", "habr": "Habr Career", "getmatch": "GetMatch", "trudvsem": "Работа в России", "telegram": "Telegram-каналы"}
