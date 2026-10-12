@@ -8,7 +8,7 @@ import argparse
 import sys
 from datetime import datetime, timezone
 
-from . import alerts, getmatch, habr, hh, llm, notify, stats, store, tgchannels
+from . import alerts, getmatch, habr, hh, llm, notify, stats, store, tgchannels, trudvsem
 from .filters import CFG, NEEDS_DESCRIPTION, evaluate, priority_after_screen
 from .settings import PROFILE_PATH
 
@@ -145,6 +145,7 @@ def main() -> None:
     if not args.no_notify:
         stats["habr"] = habr.check(db)  # rare, so a simple link is enough
         stats["getmatch"] = getmatch.check(db)
+        stats["trud"] = trudvsem.check(db)
         stats["tg"] = tgchannels.check(db)
 
     alerts.heartbeat(db)

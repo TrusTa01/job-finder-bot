@@ -16,7 +16,17 @@ CFG = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
 
 NEEDS_DESCRIPTION = "needs_description"
 # hh work_format ids the candidate accepts: REMOTE, HYBRID, ON_SITE (config.yaml work_formats)
-WORK_FORMATS = CFG.get("work_formats") or [CFG.get("required_work_format", "REMOTE")]
+def words(key: str) -> tuple[str, ...]:
+    """A config list of words as lowercase strings; blanks dropped, a bare scalar counts as one word."""
+    raw = CFG.get(key) or []
+    return tuple(t for t in (str(w).strip().lower() for w in ([raw] if not isinstance(raw, list) else raw)) if t)
+
+
+_raw_formats = CFG.get("work_formats") or [CFG.get("required_work_format", "REMOTE")]
+WORK_FORMATS = [str(f).strip().upper() for f in (_raw_formats if isinstance(_raw_formats, list) else [_raw_formats])]
+_unknown = [f for f in WORK_FORMATS if f not in ("REMOTE", "HYBRID", "ON_SITE")]
+if _unknown:
+    raise SystemExit(f"config.yaml work_formats: unknown value(s) {', '.join(_unknown)}; use REMOTE, HYBRID, ON_SITE")
 
 
 @dataclass

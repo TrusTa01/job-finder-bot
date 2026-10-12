@@ -125,9 +125,11 @@ def _sources_text() -> str:
     lines = [
         f"- hh.ru, при каждом запуске бота. Формат: {', '.join(FORMAT_NAMES.get(f, f) for f in WORK_FORMATS)}. "
         f"Запросы: {', '.join(queries)}.",
-        f"- Habr Career, раз в {habr.CHECK_EVERY_SECONDS // 3600} ч.",
-        f"- GetMatch, раз в {getmatch.CHECK_EVERY_SECONDS // 3600} ч.",
     ]
+    if habr.SIGNALS and CFG.get("habr_queries"):
+        lines.append(f"- Habr Career, раз в {habr.CHECK_EVERY_SECONDS // 3600} ч.")
+    if getmatch.SIGNALS:
+        lines.append(f"- GetMatch, раз в {getmatch.CHECK_EVERY_SECONDS // 3600} ч.")
     if tgchannels.CHANNELS:
         lines.append(f"- Telegram-каналы, раз в {tgchannels.CHECK_EVERY_SECONDS // 3600} ч, посты не старше {tgchannels.MAX_AGE_DAYS} дней. "
                      "Только эти каналы (вместо письма бот готовит короткое личное сообщение автору поста):")

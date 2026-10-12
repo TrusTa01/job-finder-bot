@@ -10,11 +10,11 @@ import time
 import requests
 
 from . import candidates, store
-from .filters import CFG
+from .filters import CFG, words
 
 URL = "https://career.habr.com/api/frontend/vacancies"
 # Searches and signals come from config.yaml (habr_queries, secondary_terms); the candidate's field decides them.
-SIGNALS = tuple(w.lower() for w in CFG.get("secondary_terms") or [])
+SIGNALS = words("secondary_terms")
 CHECK_EVERY_SECONDS = 3 * 3600
 MAX_PER_RUN = 5
 

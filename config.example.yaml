@@ -18,6 +18,8 @@ work_formats: [REMOTE]
 prompts: prompts/example.yaml
 # Hours on contact in Moscow time; replaces {availability} in the prompts.
 availability_msk: "07:00 до 16:00"
+# Where the candidate is, as it should read after "кандидат" in letters ("в Новосибирске (UTC+7)"); empty = not mentioned.
+location_note: ""
 # Labels for the stack value of the screening prompt and for the form_answers keys on the card (a key without a label is shown as is).
 stack_labels: {}
 form_labels: {}

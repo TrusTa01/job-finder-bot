@@ -110,6 +110,7 @@ def format_telegram_post(row) -> str:
 
 
 CONTACT_TOKENS = {"[TELEGRAM]": "telegram", "[PHONE]": "phone", "[WHATSAPP]": "whatsapp", "[EMAIL]": "email"}
+CONTACT_KEYS = ("telegram", "phone", "whatsapp", "email", "mail", "tg")  # contacts come from .env only; form_answers must not carry them
 
 
 def contacts() -> dict:
@@ -122,6 +123,10 @@ def contacts() -> dict:
     }
 
 
+def _is_contact_key(key) -> bool:
+    return any(c in str(key).lower() for c in CONTACT_KEYS)
+
+
 def ready_answers(mask: bool = False) -> str:
     """Basic answers (salary, city, experience, contacts), one per line. With mask the contacts are placeholders
     such as [PHONE], so the real values never reach the model; fill_contacts() puts them back."""
@@ -131,7 +136,7 @@ def ready_answers(mask: bool = False) -> str:
     pairs = [
         ("Желаемая оплата", ans.get("salary")),
         ("Город", ans.get("city")),
-        *[(FORM_LABELS.get(key, key), value) for key, value in ans.items() if key not in ("salary", "city")],
+        *[(FORM_LABELS.get(key, key), value) for key, value in ans.items() if key not in ("salary", "city") and not _is_contact_key(key) and isinstance(value, (str, int, float))],
         ("Telegram", shown["[TELEGRAM]"]),
         ("Телефон", shown["[PHONE]"]),
         ("WhatsApp (можно писать)", shown["[WHATSAPP]"]),

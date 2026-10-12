@@ -19,15 +19,25 @@ LETTER_MODEL, LETTER_EFFORT = "deepseek-flash", "low"
 PRICES = {"deepseek-flash": (0.30, 0.006, 1.20), "deepseek-v4-pro": (1.32, 0.044, 3.96)}
 
 PROMPTS_FILE = settings.ROOT / CFG.get("prompts", "prompts/example.yaml")  # prompt texts per candidate field: prompts/*.yaml
-PROMPTS = yaml.safe_load(PROMPTS_FILE.read_text(encoding="utf-8")) or {}
+try:
+    PROMPTS = yaml.safe_load(PROMPTS_FILE.read_text(encoding="utf-8"))
+except (OSError, yaml.YAMLError):
+    raise SystemExit(f"config.yaml prompts: cannot read {PROMPTS_FILE.name}") from None
+if not isinstance(PROMPTS, dict):
+    raise SystemExit(f"{PROMPTS_FILE.name}: expected a mapping of prompt texts")
 _missing = [k for k in ("screen", "letter", "dm", "answer") if not isinstance(PROMPTS.get(k), str)]
 if _missing:
     raise SystemExit(f"{PROMPTS_FILE.name}: missing prompt text(s): {', '.join(_missing)}")
 
 
+_location, _hours = str(CFG.get("location_note") or "").strip(), str(CFG.get("availability_msk") or "").strip()
+_parts = [f"кандидат {_location}" if _location else "", f"на связи с {_hours} по МСК" if _hours else ""]
+SCHEDULE = ", ".join(p for p in _parts if p) or "график и часовой пояс не указаны, не упоминай их"
+
+
 def _prompt(key: str) -> str:
-    """{availability} in the prompt file is replaced with the candidate's hours from config.yaml."""
-    return PROMPTS[key].replace("{availability}", str(CFG.get("availability_msk", "")))
+    """{schedule} in the prompt file is replaced with the candidate's location and hours from config.yaml."""
+    return PROMPTS[key].replace("{schedule}", SCHEDULE).replace("{availability}", _hours)  # {availability}: older prompt files
 
 
 SCREEN_SYSTEM = _prompt("screen")
