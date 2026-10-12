@@ -50,7 +50,7 @@ def connect() -> sqlite3.Connection:
     db = sqlite3.connect(DB_PATH)
     db.row_factory = sqlite3.Row
     db.executescript(SCHEMA)
-    for column in ("stack TEXT", "applied_at INTEGER", "snippet TEXT", "has_test INTEGER", "dismissed_at INTEGER", "message_id INTEGER", "desc_hash TEXT"):  # migrations for databases created before these columns
+    for column in ("stack TEXT", "applied_at INTEGER", "snippet TEXT", "has_test INTEGER", "dismissed_at INTEGER", "message_id INTEGER", "desc_hash TEXT", "later_at INTEGER"):  # migrations for databases created before these columns
         try:
             db.execute(f"ALTER TABLE vacancies ADD COLUMN {column}")
             db.commit()
@@ -129,6 +129,16 @@ def mark_dismissed(db: sqlite3.Connection, vacancy_id: str) -> None:
     """The user pressed ✕: the vacancy is not wanted, so rebuilds skip it and it is never sent again."""
     db.execute("UPDATE vacancies SET status='dismissed', dismissed_at=? WHERE id=? AND applied_at IS NULL", (int(time.time()), vacancy_id))
     db.commit()
+
+
+def mark_later(db: sqlite3.Connection, vacancy_id: str, days: int) -> None:
+    """Позже: the card is out of the way and comes back after `days` (run.py resends it)."""
+    db.execute("UPDATE vacancies SET status='later', later_at=? WHERE id=? AND applied_at IS NULL", (int(time.time()) + days * 86400, vacancy_id))
+    db.commit()
+
+
+def due_later(db: sqlite3.Connection) -> list[sqlite3.Row]:
+    return db.execute("SELECT * FROM vacancies WHERE status='later' AND later_at<=? ORDER BY later_at", (int(time.time()),)).fetchall()
 
 
 def mark_applied(db: sqlite3.Connection, vacancy_id: str) -> None:

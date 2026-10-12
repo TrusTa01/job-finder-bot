@@ -20,6 +20,11 @@ def dismiss_button(vacancy_id: str | None) -> dict:
     return {"text": "Неинтересно ❌", "callback_data": f"dismiss:{vacancy_id}" if vacancy_id else "dismiss"}
 
 
+def later_button(vacancy_id: str) -> dict:
+    """Позже ⏳: the card comes back after later_days (config outreach.later_days, same as the hidden market)."""
+    return {"text": "Позже ⏳", "callback_data": f"later:{vacancy_id}"}
+
+
 def dismiss_markup(vacancy_id: str | None) -> dict:
     return {"inline_keyboard": [[dismiss_button(vacancy_id)]]}
 
@@ -36,7 +41,10 @@ def _keyboard(vacancy_id: str | None) -> dict:
     """✕ always; ✅ (applied) only for vacancies. callback_data is capped at 64 bytes by Telegram."""
     if not vacancy_id or len(f"applied:{vacancy_id}".encode()) > 64:
         return DISMISS
-    return {"inline_keyboard": [[{"text": applied_label(False), "callback_data": f"applied:{vacancy_id}"}, dismiss_button(vacancy_id)]]}
+    return {"inline_keyboard": [
+        [{"text": applied_label(False), "callback_data": f"applied:{vacancy_id}"}, later_button(vacancy_id)],
+        [dismiss_button(vacancy_id)],
+    ]}
 
 
 def call_api(method: str, payload: dict) -> dict:
@@ -168,7 +176,7 @@ PITCH_VARIANTS = {"staff": "штат или удалёнка", "contract": "ко
 
 def target_markup(target_id: int, state: str = "new") -> dict:
     """Outreach card buttons (callback data t:<action>:<id>, handled by listener.py). After "sent" only the outcome buttons remain."""
-    outcome = [{"text": "Ответили 💬", "callback_data": f"t:reply:{target_id}"}, {"text": "Не интересно ❌", "callback_data": f"t:dead:{target_id}"}]
+    outcome = [{"text": "Ответили 💬", "callback_data": f"t:reply:{target_id}"}, {"text": "Неинтересно ❌", "callback_data": f"t:dead:{target_id}"}]
     if state == "sent":
         return {"inline_keyboard": [outcome]}
     first = [{"text": "Написал ✅", "callback_data": f"t:sent:{target_id}"}, {"text": "Позже ⏳", "callback_data": f"t:later:{target_id}"}]

@@ -38,6 +38,12 @@ def main() -> None:
     resent = 0
     if not args.no_notify:
         # Retry reports that failed earlier (for example while the proxy was down), oldest first
+        for row in store.due_later(db):  # Позже ⏳: the snoozed card comes back
+            message_id = notify.send_card(notify.format_vacancy(row), row["id"])
+            if message_id is None:
+                break
+            store.mark_notified(db, row["id"], message_id)
+            resent += 1
         for row in db.execute("SELECT * FROM vacancies WHERE status='ready' ORDER BY first_seen").fetchall():
             message_id = notify.send_card(notify.format_vacancy(row), row["id"])
             if message_id is None:

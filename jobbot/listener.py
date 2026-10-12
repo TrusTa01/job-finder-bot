@@ -41,6 +41,12 @@ def _handle(callback: dict, chat: str) -> None:
             store.mark_dismissed(store.connect(), vacancy_id)
         if not _call("deleteMessage", target).get("ok"):
             _call("editMessageText", {**target, "text": "❌ убрано"})
+    elif data.startswith("later:"):
+        vacancy_id = data.partition(":")[2]
+        if vacancy_id:
+            store.mark_later(store.connect(), vacancy_id, int(outreach_conf.cfg()["later_days"]))  # same period as the hidden market
+        if not _call("deleteMessage", target).get("ok"):
+            _call("editMessageText", {**target, "text": "⏳ отложено", "reply_markup": {"inline_keyboard": []}})
     elif data.startswith("applied:"):
         store.mark_applied(store.connect(), data[len("applied:"):])
         if not _call("deleteMessage", target).get("ok"):  # older than 48 hours: keep a short mark instead
