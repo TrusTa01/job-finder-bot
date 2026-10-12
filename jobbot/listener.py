@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 import requests
 
 from . import candidates, getmatch, habr, hh, llm, notify, settings, stats, store, tgchannels, trudvsem
-from .filters import CFG, SOURCE_NAMES, WORK_FORMATS, source_on
+from .filters import CFG, SOURCE_NAMES, WORK_FORMATS, set_source, source_on
 from .outreach import conf as outreach_conf, targets as outreach_targets
 from .settings import ROOT
 from .notify import API, DISMISS, applied_label, dismiss_markup, fill_contacts, ready_answers
@@ -47,6 +47,11 @@ def _handle(callback: dict, chat: str) -> None:
             _call("editMessageText", {**target, "text": applied_label(True), "reply_markup": {"inline_keyboard": []}})
     elif data.startswith("t:"):
         _target_action(data, target)
+    elif data.startswith("src:"):
+        name = data[len("src:"):]
+        if name in SOURCE_NAMES:
+            set_source(name, not source_on(name))
+        _call("editMessageReplyMarkup", {**target, "reply_markup": _switch_markup()})
 
 
 def _target_allows(status: str, action: str) -> bool:
@@ -177,7 +182,7 @@ def _handle_message(message: dict, chat: str) -> None:
     """Answer /help and /start, or employer questions pasted as a reply to a vacancy card."""
     words = (message.get("text") or "").split()
     command = words[0].split("@")[0] if words else ""
-    if str(message["chat"]["id"]) == chat and command in ("/help", "/start", "/stop", "/stats", "/stats_month", "/stats_year", "/stats_all", "/rebuild", "/restore", "/channels", "/addchannel", *HIDDEN_COMMANDS, *stats.KINDS):
+    if str(message["chat"]["id"]) == chat and command in ("/help", "/start", "/stop", "/stats", "/stats_month", "/stats_year", "/stats_all", "/rebuild", "/restore", "/channels", "/addchannel", "/switch", *HIDDEN_COMMANDS, *stats.KINDS):
         _command(message, command, chat, words[1:])
         return _delete_message(message)
     card, question = message.get("reply_to_message"), (message.get("text") or "").strip()
@@ -243,6 +248,8 @@ def _command(message: dict, command: str, chat: str, args: list[str] | None = No
         _reply(message, "Каналы, которые проверяет бот:" + chr(10) + chr(10).join("@" + c for c in tgchannels.channels(db)))
     elif command == "/addchannel":
         _reply(message, tgchannels.add_channel(db, " ".join(args or [])))
+    elif command == "/switch":
+        _send_switch(chat)
     elif command in HIDDEN_COMMANDS:
         _reply(message, _hidden_command(db, command, args or []))
     else:  # an outcome: /interview or /offer
@@ -348,6 +355,19 @@ def _start_rebuild(message: dict) -> None:
     _reply(message, "Пересборка запущена: напишу заново письма для вакансий без ✅ и ✕. Итог придёт сюда.")
 
 
+SWITCH_LABELS = {"hh": "hh.ru", "habr": "Habr Career", "getmatch": "GetMatch", "trudvsem": "Работа в России", "telegram": "Telegram-каналы"}
+
+
+def _switch_markup() -> dict:
+    """One button per job source: ✅ on, ⛔ off. Pressing one flips it."""
+    return {"inline_keyboard": [[{"text": f"{'✅' if source_on(n) else '⛔'} {SWITCH_LABELS[n]}", "callback_data": f"src:{n}"}] for n in SOURCE_NAMES]}
+
+
+def _send_switch(chat: str) -> None:
+    _call("sendMessage", {"chat_id": chat, "text": "Источники поиска. Нажмите, чтобы включить или выключить. Действует со следующего прохода. "
+                          "Скрытый рынок (/hidden) и список каналов (/channels) здесь не переключаются.", "reply_markup": _switch_markup()})
+
+
 MENU = [
     ("start", "Как пользоваться и запустить поиск"),
     ("stop", "Остановить поиск"),
@@ -359,6 +379,7 @@ MENU = [
     ("rebuild", "Написать письма заново для открытых вакансий"),
     ("restore", "Вернуть последние убранные карточки: /restore 3"),
     ("channels", "Каналы, которые проверяет бот"),
+    ("switch", "Включить или выключить источники поиска"),
     ("addchannel", "Добавить канал: /addchannel имя"),
     ("hidden", "Скрытый рынок: /hidden on или off"),
     ("targets", "Скрытый рынок: воронка"),

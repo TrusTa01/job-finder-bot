@@ -4,6 +4,7 @@ Two-phase: evaluate(vacancy) may return reason "needs_description" for vacancies
 Flutter in the title; the caller then fetches the full description and calls
 evaluate(vacancy, description) again.
 """
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -44,11 +45,38 @@ def sources_problem() -> str | None:
     return None
 
 
+SWITCH_PATH = CONFIG_PATH.parent / "data" / "sources.json"  # switches set from the chat (/switch), override config.yaml
+
+
+def _switched(name: str) -> bool | None:
+    try:
+        value = json.loads(SWITCH_PATH.read_text(encoding="utf-8")).get(name)
+    except (OSError, ValueError, AttributeError):
+        return None
+    return value if isinstance(value, bool) else None
+
+
 def source_on(name: str) -> bool:
-    """Job sources can be switched off in config.yaml: sources: {hh: false, habr: false, ...}.
-    Missing or unreadable means on."""
+    """Job sources can be switched off in config.yaml: sources: {hh: false, habr: false, ...}, or from the chat (/switch),
+    which wins. Missing or unreadable means on."""
+    switched = _switched(name)
+    if switched is not None:
+        return switched
     value = _sources.get(name, True) if isinstance(_sources, dict) else True
     return bool(value) if isinstance(value, (bool, int)) else True
+
+
+def set_source(name: str, on: bool) -> None:
+    """Write one switch to data/sources.json, atomically: the run and the listener read it at any time."""
+    try:
+        data = json.loads(SWITCH_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        data = {}
+    data[name] = on
+    SWITCH_PATH.parent.mkdir(exist_ok=True)
+    tmp = SWITCH_PATH.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    tmp.replace(SWITCH_PATH)
 
 
 @dataclass
