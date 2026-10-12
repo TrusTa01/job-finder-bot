@@ -161,14 +161,15 @@ def main() -> None:
 
     if not args.no_notify:
         # rare, so a simple link is enough; each source can be switched off in config.yaml (sources)
-        if source_on("habr"):
-            stats["habr"] = habr.check(db)
-        if source_on("getmatch"):
-            stats["getmatch"] = getmatch.check(db)
-        if source_on("trudvsem"):
-            stats["trud"] = trudvsem.check(db)
-        if source_on("telegram"):
-            stats["tg"] = tgchannels.check(db)
+        # one broken source must not stop the others: its error is reported in the stats and the pass goes on
+        for name, check, module in (("habr", habr.check, "habr"), ("getmatch", getmatch.check, "getmatch"),
+                                    ("trud", trudvsem.check, "trudvsem"), ("tg", tgchannels.check, "telegram")):
+            if not source_on(module):
+                continue
+            try:
+                stats[name] = check(db)
+            except Exception as e:  # noqa: BLE001 - reported below, the rest of the pass still runs
+                stats[name] = f"error: {type(e).__name__}"
 
     alerts.heartbeat(db)
     print(stats, f"| total LLM spend: ${store.total_cost(db):.4f}")

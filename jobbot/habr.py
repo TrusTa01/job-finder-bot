@@ -19,6 +19,11 @@ CHECK_EVERY_SECONDS = 3 * 3600
 MAX_PER_RUN = 5
 
 
+def _dict(value) -> dict:
+    """Habr sometimes sends a plain string where an object is expected: treat that as an empty object."""
+    return value if isinstance(value, dict) else {}
+
+
 def _relevant(v: dict) -> bool:
     """Habr search is loose, so require the signal in the title or in the skills."""
     blob = v.get("title", "") + " " + " ".join(s.get("title", "") for s in v.get("skills") or [])
@@ -67,13 +72,13 @@ def check(db, send: bool = True) -> int:
         return len(fresh) if not send else 0  # the preview mode never calls the LLM
     reported = 0
     for v in fresh:
-        company = (v.get("company") or {}).get("title", "")
-        salary = (v.get("salary") or {}).get("formatted") or "зарплата не указана"
+        company = _dict(v.get("company")).get("title", "")
+        salary = _dict(v.get("salary")).get("formatted") or "зарплата не указана"
         mode = "удалённо" if v.get("remoteWork") else "офис или гибрид"
         skills = ", ".join(s.get("title", "") for s in v.get("skills") or [])
         entry = {
             "id": f"habr:{v['id']}", "published_at": None, "name": v.get("title"), "employer": {"name": company},
-            "area": {"name": mode}, "experience": {"name": (v.get("qualification") or {}).get("title", "")},
+            "area": {"name": mode}, "experience": {"name": _dict(v.get("qualification")).get("title", "")},
             "alternate_url": "https://career.habr.com" + v.get("href", ""),
         }
         description = _description(v.get("href", ""), f"Навыки: {skills}. {salary}.")
