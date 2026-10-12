@@ -283,7 +283,9 @@ def _hidden_command(db, command: str, args: list[str]) -> str:
             outreach_conf.set_enabled(db, sub == "on")
             return ("Скрытый рынок включён: бот ищет студии и компании сам и присылает карточки с готовым сообщением." if sub == "on"
                     else "Скрытый рынок выключен: поиск, расходы и карточки остановлены. /hidden on включит снова.")
-        return "Скрытый рынок: " + ("включён" if outreach_conf.enabled(db) else "выключен") + ". /hidden on или /hidden off."
+        if outreach_conf.enabled(db):
+            return "Скрытый рынок" + chr(10) + "Статус: ✅ включён" + chr(10) + chr(10) + "Бот ищет компании сам и присылает карточки с готовым сообщением." + chr(10) + chr(10) + "Выключить: /hidden off"
+        return "Скрытый рынок" + chr(10) + "Статус: ⛔ выключен" + chr(10) + chr(10) + "Поиск компаний и расходы остановлены." + chr(10) + chr(10) + "Включить: /hidden on"
     if command == "/targets":
         funnel = outreach_targets.funnel(db)
         if not funnel:
@@ -379,7 +381,7 @@ def _switch_markup() -> dict:
 
 def _send_switch(chat: str) -> None:
     _call("sendMessage", {"chat_id": chat, "text": "Источники поиска. Нажмите, чтобы включить или выключить. Действует со следующего прохода. "
-                          "Скрытый рынок (/hidden) и список каналов (/channels) здесь не переключаются.", "reply_markup": _switch_markup()})
+                          "Скрытый рынок (/hidden) и список каналов (/channels) здесь не переключаются." + chr(10) + ("Скрытый рынок: ✅ включён." if outreach_conf.enabled(store.connect()) else "Скрытый рынок: ⛔ выключен.") + " Включить или выключить: /hidden on или /hidden off.", "reply_markup": _switch_markup()})
 
 
 MENU = [
