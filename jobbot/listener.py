@@ -56,6 +56,10 @@ def _handle(callback: dict, chat: str) -> None:
     elif data.startswith("hlp:"):
         for mid in data[len("hlp:"):].split(","):
             _call("deleteMessage", {"chat_id": chat_id, "message_id": int(mid)})
+    elif data == "hid:toggle":
+        db = store.connect()
+        outreach_conf.set_enabled(db, not outreach_conf.enabled(db))
+        _call("editMessageText", {**target, "text": _hidden_text(db), "reply_markup": _hidden_markup(db)})
     elif data == "src:close":
         if not _call("deleteMessage", target).get("ok"):  # older than 48 hours: keep a mark, but no buttons
             _call("editMessageText", {**target, "text": "Источники: меню закрыто.", "reply_markup": {"inline_keyboard": []}})
@@ -263,6 +267,8 @@ def _command(message: dict, command: str, chat: str, args: list[str] | None = No
         _reply(message, tgchannels.add_channel(db, " ".join(args or [])))
     elif command == "/switch":
         _send_switch(chat)
+    elif command == "/hidden" and not args:
+        _call("sendMessage", {"chat_id": chat, "text": _hidden_text(db), "reply_markup": _hidden_markup(db)})
     elif command in HIDDEN_COMMANDS:
         _reply(message, _hidden_command(db, command, args or []))
     else:  # an outcome: /interview or /offer
@@ -370,6 +376,19 @@ def _start_rebuild(message: dict) -> None:
     _reply(message, "Пересборка запущена: напишу заново письма для вакансий без ✅ и ✕. Итог придёт сюда.")
 
 
+def _hidden_text(db) -> str:
+    on = outreach_conf.enabled(db)
+    return ("Скрытый рынок" + chr(10) + ("Статус: Включён ✅" if on else "Статус: Выключен ❌") + chr(10) + chr(10)
+            + ("Бот ищет компании сам и присылает карточки с готовым сообщением." if on else "Поиск компаний и расходы остановлены."))
+
+
+def _hidden_markup(db) -> dict:
+    """One toggle button and a close button. The toggle shows the action, the text shows the state."""
+    on = outreach_conf.enabled(db)
+    return {"inline_keyboard": [[{"text": "Выключить ❌" if on else "Включить ✅", "callback_data": "hid:toggle"}],
+                                [{"text": "Скрыть меню ❌", "callback_data": "src:close"}]]}
+
+
 SWITCH_LABELS = {"hh": "hh.ru", "habr": "Habr Career", "getmatch": "GetMatch", "trudvsem": "Работа в России", "telegram": "Telegram-каналы"}
 
 
@@ -381,7 +400,7 @@ def _switch_markup() -> dict:
 
 def _send_switch(chat: str) -> None:
     _call("sendMessage", {"chat_id": chat, "text": "Источники поиска. Нажмите, чтобы включить или выключить. Действует со следующего прохода. "
-                          "Скрытый рынок (/hidden) и список каналов (/channels) здесь не переключаются." + chr(10) + ("Скрытый рынок: ✅ включён." if outreach_conf.enabled(store.connect()) else "Скрытый рынок: ⛔ выключен.") + " Включить или выключить: /hidden on или /hidden off.", "reply_markup": _switch_markup()})
+                          "Скрытый рынок (/hidden) и список каналов (/channels) здесь не переключаются." + chr(10) + ("Скрытый рынок: Включён ✅." if outreach_conf.enabled(store.connect()) else "Скрытый рынок: Выключен ❌.") + " Меню скрытого рынка: /hidden.", "reply_markup": _switch_markup()})
 
 
 MENU = [
