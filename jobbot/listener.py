@@ -390,7 +390,8 @@ def _show_hidden(db, chat: str) -> None:
     old = store.get_meta(db, "hidden_window", "")
     if old:
         _call("deleteMessage", {"chat_id": chat, "message_id": int(old)})
-    sent = _call("sendMessage", {"chat_id": chat, "text": _hidden_text(db)})
+    close = {"inline_keyboard": [[{"text": "Скрыть меню ❌", "callback_data": "src:close"}]]}
+    sent = _call("sendMessage", {"chat_id": chat, "text": _hidden_text(db), "reply_markup": close})
     if sent.get("ok"):
         store.set_meta(db, "hidden_window", str(sent["result"]["message_id"]))
 
