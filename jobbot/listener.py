@@ -15,6 +15,7 @@ import requests
 
 from . import candidates, getmatch, habr, hh, llm, notify, settings, stats, store, tgchannels
 from .filters import CFG
+from .outreach import conf as outreach_conf, targets as outreach_targets
 from .settings import ROOT
 from .notify import API, DISMISS, applied_label, dismiss_markup, fill_contacts, ready_answers
 
@@ -44,6 +45,30 @@ def _handle(callback: dict, chat: str) -> None:
         store.mark_applied(store.connect(), data[len("applied:"):])
         if not _call("deleteMessage", target).get("ok"):  # older than 48 hours: keep a short mark instead
             _call("editMessageText", {**target, "text": applied_label(True), "reply_markup": {"inline_keyboard": []}})
+    elif data.startswith("t:"):
+        _target_action(data, target)
+
+
+def _target_action(data: str, target: dict) -> None:
+    """Buttons of an outreach card: t:sent|reply|later|dead:<target id>."""
+    parts = data.split(":")
+    if len(parts) != 3 or not parts[2].isdigit():
+        return
+    action, target_id = parts[1], int(parts[2])
+    db = store.connect()
+    row = outreach_targets.get(db, target_id)
+    if not row:
+        return
+    if action == "sent":
+        outreach_targets.mark_sent(db, target_id)
+        _call("editMessageReplyMarkup", {**target, "reply_markup": notify.target_markup(target_id, "sent")})
+    elif action == "reply":
+        outreach_targets.set_status(db, target_id, "replied")
+        _call("editMessageText", {**target, "text": f"💬 Ответили: {row['name']}", "reply_markup": {"inline_keyboard": []}})
+    elif action in ("later", "dead"):
+        outreach_targets.set_status(db, target_id, action)
+        if not _call("deleteMessage", target).get("ok"):
+            _call("editMessageText", {**target, "text": "⏳ отложено" if action == "later" else "❌ убрано", "reply_markup": {"inline_keyboard": []}})
 
 
 def _vacancy_id(card: dict) -> str | None:
@@ -106,7 +131,7 @@ def _handle_message(message: dict, chat: str) -> None:
     """Answer /help and /start, or employer questions pasted as a reply to a vacancy card."""
     words = (message.get("text") or "").split()
     command = words[0].split("@")[0] if words else ""
-    if str(message["chat"]["id"]) == chat and command in ("/help", "/start", "/stop", "/stats", "/stats_month", "/stats_year", "/stats_all", "/rebuild", "/restore", "/channels", "/addchannel", *stats.KINDS):
+    if str(message["chat"]["id"]) == chat and command in ("/help", "/start", "/stop", "/stats", "/stats_month", "/stats_year", "/stats_all", "/rebuild", "/restore", "/channels", "/addchannel", *HIDDEN_COMMANDS, *stats.KINDS):
         _command(message, command, chat, words[1:])
         return _delete_message(message)
     card, question = message.get("reply_to_message"), (message.get("text") or "").strip()
@@ -172,9 +197,69 @@ def _command(message: dict, command: str, chat: str, args: list[str] | None = No
         _reply(message, "Каналы, которые проверяет бот:" + chr(10) + chr(10).join("@" + c for c in tgchannels.channels(db)))
     elif command == "/addchannel":
         _reply(message, tgchannels.add_channel(db, " ".join(args or [])))
+    elif command in HIDDEN_COMMANDS:
+        _reply(message, _hidden_command(db, command, args or []))
     else:  # an outcome: /interview or /offer
         stats.add(db, stats.KINDS[command], int(time.time()))
         _reply(message, f"Записал: {stats.KINDS[command]}.")
+
+
+HIDDEN_COMMANDS = ("/hidden", "/targets", "/followups", "/addtarget", "/setcontact", "/sources", "/removesource")
+STATUS_RU = {"new": "найдено, сообщение не готово", "drafted": "сообщение готово", "notified": "карточка отправлена", "sent": "вы написали",
+             "replied": "ответили", "later": "отложено", "dead": "не интересно"}
+
+
+def _hidden_command(db, command: str, args: list[str]) -> str:
+    """The outreach commands. Answers with a short text for the chat."""
+    if command == "/hidden":
+        sub = args[0].lower() if args else "status"
+        if sub in ("on", "off"):
+            outreach_conf.set_enabled(db, sub == "on")
+            return ("Скрытый рынок включён: бот ищет студии и компании сам и присылает карточки с готовым сообщением." if sub == "on"
+                    else "Скрытый рынок выключен: поиск, расходы и карточки остановлены. /hidden on включит снова.")
+        return "Скрытый рынок: " + ("включён" if outreach_conf.enabled(db) else "выключен") + ". /hidden on или /hidden off."
+    if command == "/targets":
+        funnel = outreach_targets.funnel(db)
+        if not funnel:
+            return "Целей пока нет."
+        return "Скрытый рынок, воронка:" + chr(10) + chr(10).join(f"- {STATUS_RU.get(s, s)}: {n}" for s, n in funnel.items())
+    if command == "/followups":
+        rows = db.execute("SELECT id, name, follow_up_at FROM targets WHERE status='sent' ORDER BY follow_up_at").fetchall()
+        if not rows:
+            return "Ждущих ответа нет."
+        return "Ждём ответа:" + chr(10) + chr(10).join(
+            f"- {r['name']}: напомню {datetime.fromtimestamp(r['follow_up_at'], timezone.utc):%d.%m}" for r in rows)
+    if command == "/addtarget":
+        url = args[0] if args else ""
+        if not url.startswith(("http://", "https://")):
+            return "Напишите адрес сайта: /addtarget https://studio.example"
+        if not outreach_targets.queue(db, url, "manual"):
+            return "Этот адрес уже есть в очереди или проверен."
+        return "Добавил в очередь, разберу при следующем проходе."
+    if command == "/setcontact":
+        if len(args) < 2 or not args[0].isdigit():
+            return "Формат: /setcontact 12 @username или /setcontact 12 почта@сайт.ру (номер цели в карточке)."
+        value = " ".join(args[1:])
+        channel = "telegram" if value.startswith("@") or "t.me/" in value else "email" if "@" in value else "other"
+        if not outreach_targets.get(db, int(args[0])):
+            return "Такой цели нет."
+        outreach_targets.set_contact(db, int(args[0]), channel, value)
+        return "Контакт записан."
+    if command == "/sources":
+        rows = outreach_targets.active_sources(db)
+        if not rows:
+            return "Найденных ботом источников пока нет."
+        return "Источники, которые бот нашёл сам (убрать: /removesource номер):" + chr(10) + chr(10).join(
+            f"{r['rid']}. {r['name']} ({'канал' if r['kind'] == 'channel' else 'каталог или статья'}) {r['url']}" for r in rows)
+    # /removesource
+    if not args or not args[0].isdigit():
+        return "Формат: /removesource 5 (номер из /sources)."
+    row = outreach_targets.remove_source_by_rowid(db, int(args[0]))
+    if not row:
+        return "Такого источника нет."
+    if row["kind"] == "channel":
+        tgchannels.forget_channel(db, row["name"])
+    return f"Убрал: {row['name']}. Он больше не появится."
 
 
 def _restore(message: dict, args: list[str]) -> None:
@@ -229,6 +314,13 @@ MENU = [
     ("restore", "Вернуть последние убранные карточки: /restore 3"),
     ("channels", "Каналы, которые проверяет бот"),
     ("addchannel", "Добавить канал: /addchannel имя"),
+    ("hidden", "Скрытый рынок: /hidden on или off"),
+    ("targets", "Скрытый рынок: воронка"),
+    ("followups", "Скрытый рынок: ждём ответа"),
+    ("addtarget", "Скрытый рынок: добавить сайт: /addtarget адрес"),
+    ("setcontact", "Скрытый рынок: контакт: /setcontact номер @имя"),
+    ("sources", "Скрытый рынок: найденные источники"),
+    ("removesource", "Скрытый рынок: убрать источник: /removesource номер"),
     ("help", "Инструкция"),
 ]
 

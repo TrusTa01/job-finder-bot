@@ -62,6 +62,22 @@ candidate_gender: male
 telegram_channels:
   # - some_job_channel   # public channel name, without @
 
+# Direct outreach ("hidden market"): the bot finds studios, outsourcing firms and agencies by itself and drafts a first
+# message for each; you send it by hand. Off by default. Switch in the chat: /hidden on | off. Nothing here is tied to a stack.
+outreach:
+  enabled: false
+  profile_terms: ["python", "backend"]   # what you do; search queries and relevance checks use these words
+  # search_queries use {term} for each profile term (defaults are in jobbot/outreach/conf.py):
+  # search_queries: ["студия разработки {term}", "{term} development studio outsourcing"]
+  seed_sources: []                       # optional starting pages (catalogs, ratings): [{name: "...", url: "https://..."}]
+  habr_queries: []                       # optional Habr Career searches whose employers become targets, e.g. ["Python"]
+  max_new_per_day: 3                     # new cards per day
+  follow_up_days: 7                      # one reminder this many days after you press "Написал"
+  discovery:
+    providers: [yandex, serper, ddg]     # one without a key in .env is skipped
+    combine: true                        # ask every provider with a key and merge the results (a wider pool); false: first working one
+    max_queries_per_day: 30              # Yandex bills per request; each query returns up to 20 pages
+
 form_answers:
   salary: "100 000 RUB"
   city: "Your city"

@@ -52,8 +52,9 @@ def send(text: str, vacancy_id: str | None = None) -> bool:
     return send_card(text, vacancy_id) is not None
 
 
-def send_card(text: str, vacancy_id: str | None = None) -> int | None:
-    """Send a report. Returns the id of its first message (to delete or replace it later), or None on failure."""
+def send_card(text: str, vacancy_id: str | None = None, markup: dict | None = None) -> int | None:
+    """Send a report. Returns the id of its first message (to delete or replace it later), or None on failure.
+    markup replaces the default buttons (outreach cards have their own)."""
     token, chat = settings.get("TELEGRAM_BOT_TOKEN"), settings.get("TELEGRAM_CHAT_ID")
     proxy = settings.telegram_proxy()
     proxies = {"https": proxy, "http": proxy} if proxy else None
@@ -67,7 +68,7 @@ def send_card(text: str, vacancy_id: str | None = None) -> int | None:
             try:
                 r = requests.post(
                     API.format(token=token, method="sendMessage"),
-                    json={"chat_id": chat, "text": chunk, "disable_web_page_preview": True, "reply_markup": _keyboard(vacancy_id)},
+                    json={"chat_id": chat, "text": chunk, "disable_web_page_preview": True, "reply_markup": markup or _keyboard(vacancy_id)},
                     proxies=proxies,
                     timeout=30,
                 )
@@ -152,6 +153,36 @@ def form_answers(row) -> str:
         return ""
     lines = ready_answers()
     return "\n\n⚠ При отклике будет анкета. Базовые ответы для копирования:\n" + lines
+
+
+TARGET_KINDS = {"studio": "студия", "outstaff": "аутстафф", "agency": "агентство", "product": "продуктовая компания"}
+PITCH_VARIANTS = {"staff": "штат или удалёнка", "contract": "контракт или аутстафф", "later": "оставить контакт на будущее"}
+
+
+def target_markup(target_id: int, state: str = "new") -> dict:
+    """Outreach card buttons (callback data t:<action>:<id>, handled by listener.py). After "sent" only the outcome buttons remain."""
+    outcome = [{"text": "Ответили 💬", "callback_data": f"t:reply:{target_id}"}, {"text": "Не интересно ❌", "callback_data": f"t:dead:{target_id}"}]
+    if state == "sent":
+        return {"inline_keyboard": [outcome]}
+    first = [{"text": "Написал ✅", "callback_data": f"t:sent:{target_id}"}, {"text": "Позже ⏳", "callback_data": f"t:later:{target_id}"}]
+    return {"inline_keyboard": [first, [outcome[1]]]}
+
+
+def format_target(row, reminder: bool = False) -> str:
+    kind = TARGET_KINDS.get(row["kind"], row["kind"] or "")
+    head = f"🎯 Скрытый рынок: {row['name']} ({kind})"
+    if reminder:
+        head = f"⏰ Напоминание: вы писали {row['name']}, ответа в базе нет. Если не ответили, можно написать ещё раз коротко.\n\n" + head
+    about = " ".join(p for p in (row["stack_hint"], row["summary"]) if p)
+    person = ", ".join(p for p in (row["contact_name"], row["contact_role"]) if p)
+    contact = row["contact_value"] or f"не найден: /setcontact {row['id']} @username или почта"
+    lines = [head]
+    if about:
+        lines.append(about)
+    lines += [f"Сайт: {row['site']}", f"Контакт: {contact}" + (f" ({person})" if person else ""), f"Вариант: {PITCH_VARIANTS.get(row['pitch_variant'], row['pitch_variant'] or '')}"]
+    if row["pitch"]:
+        lines += ["", "Сообщение (отправьте сами):", row["pitch"]]
+    return "\n".join(lines)
 
 
 def format_vacancy(row) -> str:

@@ -44,6 +44,19 @@ def add_channel(db, name: str) -> str:
     store.set_meta(db, "extra_channels", ",".join(extra))
     return f"Канал @{name} добавлен. Проверка по нему начнётся со следующего прохода."
 
+def remember_channel(db, name: str) -> None:
+    """Add a channel that was already checked (outreach discovery does its own check)."""
+    extra = [c for c in store.get_meta(db, "extra_channels", "").split(",") if c]
+    if name not in extra:
+        store.set_meta(db, "extra_channels", ",".join([*extra, name]))
+
+
+def forget_channel(db, name: str) -> None:
+    """Stop watching a channel added at runtime (channels listed in config.yaml stay)."""
+    extra = [c for c in store.get_meta(db, "extra_channels", "").split(",") if c and c != name]
+    store.set_meta(db, "extra_channels", ",".join(extra))
+
+
 def _fetch(channel: str) -> str:
     proxy = settings.telegram_proxy()
     proxies = {"http": proxy, "https": proxy} if proxy else None

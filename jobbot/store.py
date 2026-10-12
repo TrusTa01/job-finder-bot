@@ -24,6 +24,23 @@ CREATE TABLE IF NOT EXISTS llm_usage (
     tokens_in INTEGER, tokens_out INTEGER, cost_usd REAL
 );
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
+-- Direct-outreach ("hidden market") leads: companies the user may write to. See jobbot/outreach/.
+CREATE TABLE IF NOT EXISTS targets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    key TEXT UNIQUE NOT NULL,      -- co:<domain>
+    name TEXT, kind TEXT,          -- studio | outstaff | agency | product
+    site TEXT, source TEXT, stack_hint TEXT, summary TEXT,
+    contact_name TEXT, contact_role TEXT, contact_channel TEXT, contact_value TEXT,
+    status TEXT NOT NULL,          -- new | drafted | notified | sent | replied | later | dead
+    pitch TEXT, pitch_variant TEXT,
+    first_seen INTEGER NOT NULL, notified_at INTEGER, message_id INTEGER,
+    sent_at INTEGER, follow_up_at INTEGER, follow_up_sent INTEGER, note TEXT
+);
+-- Pages and channels the outreach discovery found on its own (status active | removed by the user).
+CREATE TABLE IF NOT EXISTS found_sources (
+    key TEXT PRIMARY KEY, kind TEXT, name TEXT, url TEXT,
+    status TEXT NOT NULL, first_seen INTEGER, last_checked INTEGER
+);
 """
 
 

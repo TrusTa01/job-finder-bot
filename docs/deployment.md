@@ -121,6 +121,21 @@ crontab -e
 
 `deploy/run_pass.sh` runs every pass during the day (06:00-21:59 Moscow time) and only the first pass of each hour at night, adds a random delay of up to two minutes, and takes a lock so passes never overlap. Change the hours inside the script if your day differs. Output goes to `data/run.log`.
 
+### Direct outreach ("hidden market"), optional
+
+A separate pass with its own cron line, lock and log, so it never slows the vacancy pass:
+
+```
+7 * * * * /home/bot/job-autofinder/deploy/run_outreach.sh
+```
+
+1. `chmod +x deploy/run_outreach.sh`. Add the `outreach:` block to `config.yaml` (see `config.example.yaml`): at least `profile_terms`, the words that describe what you do.
+2. For its own search, create a service account in Yandex Cloud with the role `search-api.webSearch.user`, make an API key, and put it in `.env` as `YANDEX_SEARCH_API_KEY` (an optional `SERPER_API_KEY` adds Google results through serper.dev: with `outreach.discovery.combine: true`, the default, every search provider that has a key is asked and the results are merged, so the pool is wider; if one is down the other carries on). DuckDuckGo needs no key but answers servers with a bot check, so it is not a real fallback. Without any key the bot still works on the seed pages and Habr queries from `config.yaml`, but finds nothing by itself.
+3. Preview before switching on: `python -m tools.outreach_scan` runs the search, classifies a few pages and drafts a sample message, using a throwaway database and sending nothing.
+4. Switch on in the chat with `/hidden on` (off: `/hidden off`). Restart the listener after copying the code (`systemctl restart jobbot-listener`): it is a long-running service and learns the new buttons and commands only on start.
+
+It writes only to `data/outreach.log`. Costs: the search (Yandex bills per request, so `outreach.discovery.max_queries_per_day` is 30 by default; check the first days' charges in the Yandex Cloud billing page. The cheaper deferred mode, `yandex_mode: async`, answered "unknown service" for the author's account, hence sync is the default) and a few cents of DeepSeek per day, counted in the same `daily_llm_budget_usd`.
+
 ## 8. The ✕ button (optional, recommended)
 
 Every message carries a ✕ button that deletes it. A small service listens for button presses (long polling, about 30 MB of memory). Install it as root, after editing `User=` and the two paths in `deploy/jobbot-listener.service` for your Linux user:
