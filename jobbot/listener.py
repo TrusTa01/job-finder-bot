@@ -167,10 +167,8 @@ def _parts(text: str, limit: int = 3800) -> list[str]:
 def _send_help(chat) -> None:
     text = HELP_PATH.read_text(encoding="utf-8").replace("{sources}", _sources_text()) if HELP_PATH.exists() else "Инструкции пока нет."
     parts = _parts(text)
-    for i, part in enumerate(parts):
-        last = i == len(parts) - 1
-        _call("sendMessage", {"chat_id": chat, "text": part, "disable_web_page_preview": True, "reply_markup": DISMISS} if last
-              else {"chat_id": chat, "text": part, "disable_web_page_preview": True})
+    for part in parts:
+        _call("sendMessage", {"chat_id": chat, "text": part, "disable_web_page_preview": True})
 
 
 def _delete_message(message: dict) -> None:
