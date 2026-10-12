@@ -59,6 +59,23 @@ def mark_sent(db, target_id: int) -> None:
     db.commit()
 
 
+def mark_later(db, target_id: int) -> None:
+    """The user pressed "Позже": the card comes back after `later_days`, on top of the daily cap."""
+    when = int(time.time()) + int(conf.cfg()["later_days"]) * DAY
+    db.execute("UPDATE targets SET status='later', follow_up_at=? WHERE id=?", (when, target_id))
+    db.commit()
+
+
+def due_later(db) -> list[sqlite3.Row]:
+    return db.execute("SELECT * FROM targets WHERE status='later' AND follow_up_at<=? ORDER BY follow_up_at", (int(time.time()),)).fetchall()
+
+
+def mark_returned(db, target_id: int, message_id: int | None) -> None:
+    """A snoozed card was sent again. notified_at stays as it was, so it does not count against the daily cap."""
+    db.execute("UPDATE targets SET status='notified', message_id=?, follow_up_at=NULL WHERE id=?", (message_id, target_id))
+    db.commit()
+
+
 def set_contact(db, target_id: int, channel: str, value: str) -> None:
     db.execute("UPDATE targets SET contact_channel=?, contact_value=? WHERE id=?", (channel, value, target_id))
     db.commit()

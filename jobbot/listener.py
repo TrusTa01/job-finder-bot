@@ -66,7 +66,10 @@ def _target_action(data: str, target: dict) -> None:
         outreach_targets.set_status(db, target_id, "replied")
         _call("editMessageText", {**target, "text": f"💬 Ответили: {row['name']}", "reply_markup": {"inline_keyboard": []}})
     elif action in ("later", "dead"):
-        outreach_targets.set_status(db, target_id, action)
+        if action == "later":
+            outreach_targets.mark_later(db, target_id)
+        else:
+            outreach_targets.set_status(db, target_id, "dead")
         if not _call("deleteMessage", target).get("ok"):
             _call("editMessageText", {**target, "text": "⏳ отложено" if action == "later" else "❌ убрано", "reply_markup": {"inline_keyboard": []}})
 

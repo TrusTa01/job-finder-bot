@@ -16,8 +16,14 @@ DIGEST_EVERY_SECONDS = 24 * 3600
 
 def work_cards(db, profile: str, send: bool) -> dict:
     """Draft a pitch for new targets and send their cards, at most `max_new_per_day` cards in 24 hours."""
-    out = {"drafted": 0, "sent": 0}
+    out = {"drafted": 0, "sent": 0, "returned": 0}
     cfg = conf.cfg()
+    for row in targets.due_later(db) if send else []:  # snoozed cards come back on top of the daily cap
+        message_id = notify.send_card(notify.format_target(row, returned=True), markup=notify.target_markup(row["id"]))
+        if message_id is None:
+            break
+        targets.mark_returned(db, row["id"], message_id)
+        out["returned"] += 1
     room = int(cfg["max_new_per_day"]) - targets.new_cards_today(db)
     budget = CFG["limits"].get("daily_llm_budget_usd", 0.25)
     for row in db.execute("SELECT * FROM targets WHERE status IN ('new','drafted') ORDER BY id").fetchall():

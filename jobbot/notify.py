@@ -168,9 +168,11 @@ def target_markup(target_id: int, state: str = "new") -> dict:
     return {"inline_keyboard": [first, [outcome[1]]]}
 
 
-def format_target(row, reminder: bool = False) -> str:
+def format_target(row, reminder: bool = False, returned: bool = False) -> str:
     kind = TARGET_KINDS.get(row["kind"], row["kind"] or "")
     head = f"🎯 Скрытый рынок: {row['name']} ({kind})"
+    if returned:
+        head = "↩️ Вы отложили эту компанию, возвращаю карточку.\n\n" + head
     if reminder:
         head = f"⏰ Напоминание: вы писали {row['name']}, ответа в базе нет. Если не ответили, можно написать ещё раз коротко.\n\n" + head
     about = " ".join(p for p in (row["stack_hint"], row["summary"]) if p)
