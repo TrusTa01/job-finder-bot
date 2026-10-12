@@ -93,6 +93,24 @@ def host(url: str) -> str:
     return urlparse(url).netloc.lower().split(":")[0].removeprefix("www.")
 
 
+NAT64 = ipaddress.ip_network("64:ff9b::/96")
+
+
+def _is_public_ip(ip: str) -> bool:
+    """A globally routable address. IPv6 forms that carry an IPv4 address (mapped, 6to4, Teredo, NAT64) must carry a public one."""
+    try:
+        a = ipaddress.ip_address(ip.split("%")[0])
+    except ValueError:
+        return False
+    if isinstance(a, ipaddress.IPv6Address):
+        embedded = [a.ipv4_mapped, a.sixtofour, a.teredo[1] if a.teredo else None]
+        if a in NAT64:
+            embedded.append(ipaddress.IPv4Address(int(a) & 0xFFFFFFFF))
+        if any(e is not None and not e.is_global for e in embedded):
+            return False
+    return a.is_global
+
+
 _guard = threading.local()
 _real_getaddrinfo = socket.getaddrinfo
 
@@ -104,7 +122,7 @@ def _guarded_getaddrinfo(host, port, *args, **kwargs):
     infos = _real_getaddrinfo(host, port, *args, **kwargs)
     if not getattr(_guard, "on", False):
         return infos
-    public = [i for i in infos if ipaddress.ip_address(i[4][0].split("%")[0]).is_global]
+    public = [i for i in infos if _is_public_ip(i[4][0])]
     if not public:
         raise socket.gaierror("no public address")
     return public
@@ -127,10 +145,27 @@ def _public(hostname: str) -> bool:
         infos = socket.getaddrinfo(hostname, None)
     except OSError:
         return False
-    return all(ipaddress.ip_address(i[4][0]).is_global for i in infos)
+    return all(_is_public_ip(i[4][0]) for i in infos)
 
 
 MAX_REDIRECTS = 5
+WEB_PORTS = (None, 80, 443)  # pages are fetched only from ordinary web ports
+READ_SECONDS = 30
+
+
+def _read(r) -> bytes | None:
+    """The body, at most MAX_BYTES, within READ_SECONDS in total: a server dripping one byte at a time (the socket timeout
+    restarts on every byte) cannot hold the pass for ever. None when the deadline passes."""
+    deadline, chunks, size = time.time() + READ_SECONDS, [], 0
+    while size < MAX_BYTES:
+        if time.time() > deadline:
+            return None
+        chunk = r.raw.read(min(16384, MAX_BYTES - size), decode_content=True)
+        if not chunk:
+            break
+        chunks.append(chunk)
+        size += len(chunk)
+    return b"".join(chunks)
 
 
 def _peer_is_public(r) -> bool:
@@ -141,8 +176,8 @@ def _peer_is_public(r) -> bool:
     if sock is None:
         return True
     try:
-        return ipaddress.ip_address(sock.getpeername()[0].split("%")[0]).is_global
-    except (OSError, ValueError, IndexError):
+        return _is_public_ip(sock.getpeername()[0])
+    except (OSError, IndexError):
         return False
 
 
@@ -152,8 +187,12 @@ def _open(url: str, check_robots: bool, timeout: int = 25):
     Returns an open streaming response, or None. The caller closes it."""
     for _ in range(MAX_REDIRECTS + 1):
         p = urlparse(url)
-        if p.scheme not in ("http", "https") or not p.hostname or not _public(p.hostname):
+        try:
+            port = p.port
+        except ValueError:
             return None
+        if p.scheme not in ("http", "https") or not p.hostname or port not in WEB_PORTS or not _public(p.hostname):
+            return None  # only ports 80 and 443: any other port on a public name may be a service of this very server
         if check_robots:
             if not _allowed(url):
                 return None
@@ -191,7 +230,8 @@ def _allowed(url: str) -> bool:
         else:
             # 5xx: skip the host this run; 4xx: no robots.txt, everything allowed
             try:
-                text = r.raw.read(MAX_BYTES, decode_content=True).decode("utf-8", "replace") if r.status_code < 400 else ""
+                body = _read(r) if r.status_code < 400 else b""
+                text = None if body is None else body.decode("utf-8", "replace")
             except (requests.RequestException, OSError):
                 text = None
             _robots[base] = None if r.status_code >= 500 or text is None else Robots(text)
@@ -208,7 +248,9 @@ def fetch(url: str) -> str | None:
     try:
         if r.status_code != 200 or "html" not in r.headers.get("content-type", "").lower():
             return None
-        raw = r.raw.read(MAX_BYTES, decode_content=True)
+        raw = _read(r)
+        if raw is None:
+            return None
     except (requests.RequestException, OSError):
         return None
     finally:
