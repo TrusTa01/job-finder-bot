@@ -47,6 +47,9 @@ def _handle(callback: dict, chat: str) -> None:
             _call("editMessageText", {**target, "text": applied_label(True), "reply_markup": {"inline_keyboard": []}})
     elif data.startswith("t:"):
         _target_action(data, target)
+    elif data.startswith("hlp:"):
+        for mid in data[len("hlp:"):].split(","):
+            _call("deleteMessage", {"chat_id": chat_id, "message_id": int(mid)})
     elif data == "src:close":
         if not _call("deleteMessage", target).get("ok"):  # older than 48 hours: keep a mark, but no buttons
             _call("editMessageText", {**target, "text": "Источники: меню закрыто.", "reply_markup": {"inline_keyboard": []}})
@@ -169,9 +172,13 @@ def _parts(text: str, limit: int = 3800) -> list[str]:
 
 def _send_help(chat) -> None:
     text = HELP_PATH.read_text(encoding="utf-8").replace("{sources}", _sources_text()) if HELP_PATH.exists() else "Инструкции пока нет."
-    parts = _parts(text)
-    for part in parts:
-        _call("sendMessage", {"chat_id": chat, "text": part, "disable_web_page_preview": True})
+    ids = []
+    for part in _parts(text):
+        ids.append(_call("sendMessage", {"chat_id": chat, "text": part, "disable_web_page_preview": True})["result"]["message_id"])
+    # every part carries the same hide button, which removes all parts of this help at once
+    markup = {"inline_keyboard": [[{"text": "Скрыть справку ❌", "callback_data": "hlp:" + ",".join(map(str, ids))}]]}
+    for mid in ids:
+        _call("editMessageReplyMarkup", {"chat_id": chat, "message_id": mid, "reply_markup": markup})
 
 
 def _delete_message(message: dict) -> None:
@@ -361,8 +368,8 @@ SWITCH_LABELS = {"hh": "hh.ru", "habr": "Habr Career", "getmatch": "GetMatch", "
 
 def _switch_markup() -> dict:
     """One button per job source: ✅ on, ⛔ off. Pressing one flips it."""
-    rows = [[{"text": f"{'✅' if source_on(n) else '⛔'} {SWITCH_LABELS[n]}", "callback_data": f"src:{n}"}] for n in SOURCE_NAMES]
-    return {"inline_keyboard": rows + [[{"text": "✖ Закрыть", "callback_data": "src:close"}]]}
+    rows = [[{"text": f"{SWITCH_LABELS[n]} {'✅' if source_on(n) else '⛔'}", "callback_data": f"src:{n}"}] for n in SOURCE_NAMES]
+    return {"inline_keyboard": rows + [[{"text": "Скрыть меню ❌", "callback_data": "src:close"}]]}
 
 
 def _send_switch(chat: str) -> None:

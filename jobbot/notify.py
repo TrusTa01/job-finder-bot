@@ -12,12 +12,12 @@ FORM_LABELS = CFG.get("form_labels") or {}  # config: form_answers key -> questi
 
 API = "https://api.telegram.org/bot{token}/{method}"
 LIMIT = 4000  # Telegram caps a message at 4096 characters
-DISMISS = {"inline_keyboard": [[{"text": "❌", "callback_data": "dismiss"}]]}  # handled by listener.py
+DISMISS = {"inline_keyboard": [[{"text": "Скрыть ❌", "callback_data": "dismiss"}]]}  # handled by listener.py
 
 
 def dismiss_button(vacancy_id: str | None) -> dict:
     """The ✕ button; with a vacancy id the listener also records the dismissal in the database."""
-    return {"text": "Неинтересно ❌", "callback_data": f"dismiss:{vacancy_id}" if vacancy_id else "dismiss"}
+    return {"text": "Скрыть ❌", "callback_data": f"dismiss:{vacancy_id}" if vacancy_id else "dismiss"}
 
 
 def dismiss_markup(vacancy_id: str | None) -> dict:
