@@ -37,6 +37,8 @@ def handle(db, profile: str, entry: dict, description: str, direct_message: bool
         decision, usage = llm.screen(profile, entry, description)
         store.log_usage(db, *usage)
         fit, issue = decision.get("fit", "no"), decision.get("location_or_schedule_issue", "")
+        if llm.suspicious(description):
+            decision["reason"] = (decision.get("reason") or "") + " ⚠ В тексте вакансии есть фраза, адресованная ИИ: проигнорирована."
         if in_office_city((entry.get("area") or {}).get("name", "")):
             issue = ""  # same city: the time difference does not apply
         if fit == "no":

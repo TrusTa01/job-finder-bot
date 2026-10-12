@@ -117,6 +117,8 @@ def main() -> None:
             store.log_usage(db, *usage)
             fit = decision.get("fit", "no")
             issue = decision.get("location_or_schedule_issue", "")
+            if llm.suspicious(description):
+                decision["reason"] = (decision.get("reason") or "") + " ⚠ В тексте вакансии есть фраза, адресованная ИИ: проигнорирована."
             if in_office_city((v.get("area") or {}).get("name", "")):
                 issue = ""  # same city: the time difference does not apply
             if fit == "no":
