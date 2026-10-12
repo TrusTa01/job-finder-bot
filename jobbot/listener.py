@@ -147,9 +147,25 @@ def _sources_text() -> str:
     return chr(10).join(lines)
 
 
+def _parts(text: str, limit: int = 3800) -> list[str]:
+    """Telegram refuses messages over 4096 characters: split by paragraphs, never inside one."""
+    parts, cur = [], ""
+    for para in text.split(chr(10) * 2):
+        if cur and len(cur) + len(para) + 2 > limit:
+            parts.append(cur)
+            cur = para
+        else:
+            cur = f"{cur}{chr(10)}{chr(10)}{para}" if cur else para
+    return parts + ([cur] if cur else [])
+
+
 def _send_help(chat) -> None:
     text = HELP_PATH.read_text(encoding="utf-8").replace("{sources}", _sources_text()) if HELP_PATH.exists() else "Инструкции пока нет."
-    _call("sendMessage", {"chat_id": chat, "text": text, "disable_web_page_preview": True, "reply_markup": DISMISS})
+    parts = _parts(text)
+    for i, part in enumerate(parts):
+        last = i == len(parts) - 1
+        _call("sendMessage", {"chat_id": chat, "text": part, "disable_web_page_preview": True, "reply_markup": DISMISS} if last
+              else {"chat_id": chat, "text": part, "disable_web_page_preview": True})
 
 
 def _delete_message(message: dict) -> None:
