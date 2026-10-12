@@ -17,6 +17,7 @@ LISTING_HOSTS = ("vc.ru", "habr.com")      # content sites: an article there may
 COMPANY_ON_AGGREGATOR = ("career.habr.com",)  # the company page links to the company's own site, which is the real target
 MAX_LISTING_LINKS = 40
 MAX_CHANNELS_PER_PAGE = 10
+PASS_SECONDS = 600         # time budget of one classification run; the cron line is hourly and takes a lock
 CHANNEL_RECHECK_DAYS = 30  # a loaded channel that did not fit is looked at again after this long
 MAX_PAGE = 5            # how deep into the results one query goes before it rests
 DRY_RUNS_TO_REST = 2    # runs without a single new page before a query rests
@@ -183,7 +184,10 @@ def process(db, limit: int) -> dict:
     """Classify up to `limit` queued pages. Stops early when the daily LLM budget is spent or the model is down."""
     stats = {"triaged": 0, "targets": 0, "sources": 0, "channels": 0, "budget": False}
     budget = CFG["limits"].get("daily_llm_budget_usd", 0.25)
+    deadline = time.time() + PASS_SECONDS
     for row in targets.next_queued(db, limit):
+        if time.time() > deadline or web.saturated():
+            break  # out of time, or hostile servers are holding fetches open: what is left stays queued for the next pass
         if store.spend_last_day(db) >= budget:
             stats["budget"] = True
             break

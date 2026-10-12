@@ -242,6 +242,15 @@ def _allowed(url: str) -> bool:
 
 
 FETCH_SECONDS = 45  # the whole fetch: robots.txt, redirects, headers and body
+MAX_STUCK = 5       # fetches abandoned at the deadline that still hang on a hostile server (each holds a thread and a socket)
+_stuck: list[threading.Thread] = []
+
+
+def saturated() -> bool:
+    """True while MAX_STUCK abandoned fetches are still hanging: callers stop fetching instead of piling up threads and sockets,
+    and keep what is left for a later pass (not treated as a failure of the page)."""
+    _stuck[:] = [w for w in _stuck if w.is_alive()]
+    return len(_stuck) >= MAX_STUCK
 
 
 def fetch(url: str) -> str | None:
@@ -259,6 +268,8 @@ def fetch(url: str) -> str | None:
     worker = threading.Thread(target=work, daemon=True)
     worker.start()
     worker.join(FETCH_SECONDS)
+    if worker.is_alive():
+        _stuck.append(worker)
     return box[0] if box else None
 
 
