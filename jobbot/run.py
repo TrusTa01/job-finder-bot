@@ -9,7 +9,7 @@ import sys
 from datetime import datetime, timezone
 
 from . import alerts, getmatch, habr, hh, llm, notify, stats, store, tgchannels, trudvsem
-from .filters import CFG, NEEDS_DESCRIPTION, evaluate, priority_after_screen
+from .filters import CFG, NEEDS_DESCRIPTION, evaluate, priority_after_screen, source_on
 from .settings import PROFILE_PATH
 
 
@@ -46,8 +46,8 @@ def main() -> None:
             resent += 1
 
     known = store.known_ids(db)
-    found = hh.search_all(args.days)
-    if not found:
+    found = hh.search_all(args.days) if source_on("hh") else {}
+    if not found and source_on("hh"):
         # A 30-day search never legitimately returns nothing, so hh is unreachable or the session expired
         alerts.problem(
             db, "hh",
@@ -143,10 +143,15 @@ def main() -> None:
         alerts.recovered(db, "llm", "модель отвечает.")
 
     if not args.no_notify:
-        stats["habr"] = habr.check(db)  # rare, so a simple link is enough
-        stats["getmatch"] = getmatch.check(db)
-        stats["trud"] = trudvsem.check(db)
-        stats["tg"] = tgchannels.check(db)
+        # rare, so a simple link is enough; each source can be switched off in config.yaml (sources)
+        if source_on("habr"):
+            stats["habr"] = habr.check(db)
+        if source_on("getmatch"):
+            stats["getmatch"] = getmatch.check(db)
+        if source_on("trudvsem"):
+            stats["trud"] = trudvsem.check(db)
+        if source_on("telegram"):
+            stats["tg"] = tgchannels.check(db)
 
     alerts.heartbeat(db)
     print(stats, f"| total LLM spend: ${store.total_cost(db):.4f}")

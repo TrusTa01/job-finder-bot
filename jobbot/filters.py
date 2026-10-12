@@ -29,6 +29,11 @@ if _unknown:
     raise SystemExit(f"config.yaml work_formats: unknown value(s) {', '.join(_unknown)}; use REMOTE, HYBRID, ON_SITE")
 
 
+def source_on(name: str) -> bool:
+    """Job sources can be switched off in config.yaml: sources: {hh: false, habr: false, ...}. Missing means on."""
+    return bool((CFG.get("sources") or {}).get(name, True))
+
+
 @dataclass
 class Verdict:
     skip: bool

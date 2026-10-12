@@ -100,3 +100,11 @@ form_answers:
   city: "Your city"
   mobile_experience: "Android: N years, iOS: none"
   web_experience: "No commercial experience with Flutter Web"
+
+# Job sources to search. Set false to switch one off (hh is the main search; missing means on).
+sources:
+  hh: true
+  habr: true
+  getmatch: true
+  trudvsem: true
+  telegram: true

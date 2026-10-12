@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 import requests
 
 from . import candidates, getmatch, habr, hh, llm, notify, settings, stats, store, tgchannels, trudvsem
-from .filters import CFG, WORK_FORMATS
+from .filters import CFG, WORK_FORMATS, source_on
 from .outreach import conf as outreach_conf, targets as outreach_targets
 from .settings import ROOT
 from .notify import API, DISMISS, applied_label, dismiss_markup, fill_contacts, ready_answers
@@ -122,19 +122,19 @@ FORMAT_NAMES = {"REMOTE": "удалённо", "HYBRID": "гибрид", "ON_SITE
 def _sources_text() -> str:
     """The "where the bot searches" list, built from the config and the source modules, so every copy shows its own."""
     queries = list(dict.fromkeys(q["text"] for q in CFG["search"]["queries"]))
-    lines = [
-        f"- hh.ru, при каждом запуске бота. Формат: {', '.join(FORMAT_NAMES.get(f, f) for f in WORK_FORMATS)}. "
-        f"Запросы: {', '.join(queries)}.",
-    ]
-    if habr.SIGNALS and CFG.get("habr_queries"):
+    lines = []
+    if source_on("hh"):
+        lines.append(f"- hh.ru, при каждом запуске бота. Формат: {', '.join(FORMAT_NAMES.get(f, f) for f in WORK_FORMATS)}. "
+                     f"Запросы: {', '.join(queries)}.")
+    if source_on("habr") and habr.SIGNALS and CFG.get("habr_queries"):
         lines.append(f"- Habr Career, раз в {habr.CHECK_EVERY_SECONDS // 3600} ч.")
-    if getmatch.SIGNALS:
+    if source_on("getmatch") and getmatch.SIGNALS:
         lines.append(f"- GetMatch, раз в {getmatch.CHECK_EVERY_SECONDS // 3600} ч.")
-    if CFG.get("trudvsem_queries"):
+    if source_on("trudvsem") and CFG.get("trudvsem_queries"):
         regions = CFG.get("trudvsem_regions") or []
         where = f" Регионы: {', '.join(map(str, regions))}." if regions else " Вся Россия."
         lines.append(f"- Работа в России (trudvsem.ru), раз в {trudvsem.CHECK_EVERY_SECONDS // 3600} ч.{where}")
-    if tgchannels.CHANNELS:
+    if source_on("telegram") and tgchannels.CHANNELS:
         lines.append(f"- Telegram-каналы, раз в {tgchannels.CHECK_EVERY_SECONDS // 3600} ч, посты не старше {tgchannels.MAX_AGE_DAYS} дней. "
                      "Только эти каналы (вместо письма бот готовит короткое личное сообщение автору поста):")
         lines += [f"  - @{c}" for c in tgchannels.CHANNELS]
