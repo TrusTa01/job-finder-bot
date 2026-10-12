@@ -9,7 +9,7 @@ import sys
 from datetime import datetime, timezone
 
 from . import alerts, getmatch, habr, hh, llm, notify, stats, store, tgchannels, trudvsem
-from .filters import CFG, NEEDS_DESCRIPTION, evaluate, priority_after_screen, source_on
+from .filters import CFG, NEEDS_DESCRIPTION, evaluate, priority_after_screen, source_on, sources_problem
 from .settings import PROFILE_PATH
 
 
@@ -46,18 +46,27 @@ def main() -> None:
             resent += 1
 
     known = store.known_ids(db)
-    hh_on = source_on("hh")
-    found = hh.search_all(args.days) if hh_on else {}
-    if hh_on and not found:
-        # A 30-day search never legitimately returns nothing, so hh is unreachable or the session expired
-        alerts.problem(
-            db, "hh",
-            "hh.ru не вернул ни одной вакансии: сессия могла истечь или hh недоступен. " + alerts.HH_HELP,
-        )
-        print("no vacancies returned by hh")
-        return
-    if hh_on:
-        alerts.recovered(db, "hh", "связь с hh.ru работает.")
+    config_problem = sources_problem()
+    if config_problem:
+        alerts.problem(db, "config", config_problem)
+    else:
+        alerts.recovered(db, "config", "раздел sources в config.yaml исправлен.")
+
+    found = hh.search_all(args.days) if source_on("hh") else {}
+    hh_on = bool(found)  # False when hh is switched off or returned nothing; the other sources still run
+    if source_on("hh"):
+        if found:
+            alerts.recovered(db, "hh", "связь с hh.ru работает.")
+        else:
+            # A 30-day search never legitimately returns nothing, so hh is unreachable or the session expired
+            alerts.problem(
+                db, "hh",
+                "hh.ru не вернул ни одной вакансии: сессия могла истечь или hh недоступен. " + alerts.HH_HELP,
+            )
+            print("no vacancies returned by hh")
+    else:  # switched off: drop alert states left from before, so they do not suppress a later alert
+        for key in ("hh", "hh_desc"):
+            store.set_meta(db, f"alert_active_{key}", "0")
 
     new = sorted((v for v in found.values() if v["id"] not in known), key=lambda v: v["published_at"], reverse=True)
     cache = hh.load_cache() if hh_on else {}
@@ -127,16 +136,13 @@ def main() -> None:
                 stats["sent"] += 1
     if hh_on:
         hh.save_cache(cache)
-
-    if not hh_on:
-        pass  # hh was never contacted, so it has nothing to report or recover
-    elif stats["hh_errors"] and not (stats["ready"] or stats["screened_out"]):
-        alerts.problem(
-            db, "hh_desc",
-            f"hh.ru не отдаёт описания вакансий (ошибок в этом запуске: {stats['hh_errors']}): сессия могла истечь. " + alerts.HH_HELP,
-        )
-    elif not stats["hh_errors"]:
-        alerts.recovered(db, "hh_desc", "описания вакансий с hh.ru снова загружаются.")
+        if stats["hh_errors"] and not (stats["ready"] or stats["screened_out"]):
+            alerts.problem(
+                db, "hh_desc",
+                f"hh.ru не отдаёт описания вакансий (ошибок в этом запуске: {stats['hh_errors']}): сессия могла истечь. " + alerts.HH_HELP,
+            )
+        elif not stats["hh_errors"]:
+            alerts.recovered(db, "hh_desc", "описания вакансий с hh.ru снова загружаются.")
 
     if stats["errors"] and not (stats["ready"] or stats["screened_out"]):
         alerts.problem(

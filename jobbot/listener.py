@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 import requests
 
 from . import candidates, getmatch, habr, hh, llm, notify, settings, stats, store, tgchannels, trudvsem
-from .filters import CFG, WORK_FORMATS, source_on
+from .filters import CFG, SOURCE_NAMES, WORK_FORMATS, source_on
 from .outreach import conf as outreach_conf, targets as outreach_targets
 from .settings import ROOT
 from .notify import API, DISMISS, applied_label, dismiss_markup, fill_contacts, ready_answers
@@ -138,7 +138,12 @@ def _sources_text() -> str:
         lines.append(f"- Telegram-каналы, раз в {tgchannels.CHECK_EVERY_SECONDS // 3600} ч, посты не старше {tgchannels.MAX_AGE_DAYS} дней. "
                      "Только эти каналы (вместо письма бот готовит короткое личное сообщение автору поста):")
         lines += [f"  - @{c}" for c in tgchannels.CHANNELS]
-    lines.append("Другие источники бот не смотрит." if lines else "Все источники отключены в config.yaml (sources).")
+    if lines:
+        lines.append("Другие источники бот не смотрит.")
+    elif all(not source_on(n) for n in SOURCE_NAMES):
+        lines.append("Все источники отключены в config.yaml (sources).")
+    else:
+        lines.append("Включённые источники пока ничего не ищут: в config.yaml не заданы запросы или каналы.")
     return chr(10).join(lines)
 
 

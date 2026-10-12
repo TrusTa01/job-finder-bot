@@ -31,16 +31,24 @@ if _unknown:
 
 SOURCE_NAMES = ("hh", "habr", "getmatch", "trudvsem", "telegram")
 _sources = CFG.get("sources") or {}
-if not isinstance(_sources, dict):
-    raise SystemExit("config.yaml sources: expected a mapping like {hh: true, habr: false}")
-_bad = [f"{k}={v!r}" for k, v in _sources.items() if k not in SOURCE_NAMES or not isinstance(v, bool)]
-if _bad:
-    raise SystemExit(f"config.yaml sources: {', '.join(_bad)}; names are {', '.join(SOURCE_NAMES)}, values true or false")
+
+
+def sources_problem() -> str | None:
+    """What is wrong in config.yaml `sources`, or None. Not raised at import: the caller reports it and the run goes on."""
+    if not isinstance(_sources, dict):
+        return "config.yaml sources: ожидается список вида {hh: true, habr: false}, все источники считаются включёнными."
+    bad = [f"{k}={v!r}" for k, v in _sources.items() if k not in SOURCE_NAMES or not isinstance(v, (bool, int))]
+    if bad:
+        return (f"config.yaml sources: непонятные записи {', '.join(bad)} (имена: {', '.join(SOURCE_NAMES)}, "
+                "значения true или false), такие источники считаются включёнными.")
+    return None
 
 
 def source_on(name: str) -> bool:
-    """Job sources can be switched off in config.yaml: sources: {hh: false, habr: false, ...}. Missing means on."""
-    return _sources.get(name, True)
+    """Job sources can be switched off in config.yaml: sources: {hh: false, habr: false, ...}.
+    Missing or unreadable means on."""
+    value = _sources.get(name, True) if isinstance(_sources, dict) else True
+    return bool(value) if isinstance(value, (bool, int)) else True
 
 
 @dataclass
