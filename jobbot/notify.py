@@ -7,6 +7,9 @@ import requests
 from . import settings
 from .filters import CFG, resume_checklist
 
+STACK_LABELS = CFG.get("stack_labels") or {}  # config: stack value from the screening prompt -> label on the card
+FORM_LABELS = CFG.get("form_labels") or {}  # config: form_answers key -> question label in the card
+
 API = "https://api.telegram.org/bot{token}/{method}"
 LIMIT = 4000  # Telegram caps a message at 4096 characters
 DISMISS = {"inline_keyboard": [[{"text": "❌", "callback_data": "dismiss"}]]}  # handled by listener.py
@@ -94,7 +97,7 @@ def send_card(text: str, vacancy_id: str | None = None, markup: dict | None = No
 
 
 def format_telegram_post(row) -> str:
-    stack = {"flutter": "Flutter", "devops": "DevOps / инфраструктура"}.get(row["stack"], "")
+    stack = STACK_LABELS.get(row["stack"], "")
     lines = [
         f"Telegram @{row['employer']}: {row['name']}",
         f"Оценка: {row['fit']}" + (f" · стек: {stack}" if stack else ""),
@@ -128,8 +131,7 @@ def ready_answers(mask: bool = False) -> str:
     pairs = [
         ("Желаемая оплата", ans.get("salary")),
         ("Город", ans.get("city")),
-        ("Опыт Flutter Android/iOS", ans.get("mobile_experience")),
-        ("Опыт Flutter Web", ans.get("web_experience")),
+        *[(FORM_LABELS.get(key, key), value) for key, value in ans.items() if key not in ("salary", "city")],
         ("Telegram", shown["[TELEGRAM]"]),
         ("Телефон", shown["[PHONE]"]),
         ("WhatsApp (можно писать)", shown["[WHATSAPP]"]),
@@ -191,7 +193,7 @@ def format_vacancy(row) -> str:
     if str(row["id"]).startswith("tg:"):
         return format_telegram_post(row)
     priority = "приоритет обычный" if row["priority"] == "normal" else "приоритет низкий"
-    stack = {"flutter": "Flutter", "devops": "DevOps / инфраструктура"}.get(row["stack"], "")
+    stack = STACK_LABELS.get(row["stack"], "")
     lines = [
         f"{row['name']}",
         f"{row['employer']} · {row['area']} · {row['experience']}",

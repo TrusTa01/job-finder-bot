@@ -10,10 +10,11 @@ import time
 import requests
 
 from . import candidates, store
+from .filters import CFG
 
 URL = "https://career.habr.com/api/frontend/vacancies"
-QUERY = {"q": "Flutter", "type": "all", "sort": "date", "per_page": 50}
-SIGNALS = ("flutter", "dart", "флаттер")
+# Searches and signals come from config.yaml (habr_queries, secondary_terms); the candidate's field decides them.
+SIGNALS = tuple(w.lower() for w in CFG.get("secondary_terms") or [])
 CHECK_EVERY_SECONDS = 3 * 3600
 MAX_PER_RUN = 5
 
@@ -25,11 +26,19 @@ def _relevant(v: dict) -> bool:
 
 
 def fetch() -> list[dict]:
-    try:
-        r = requests.get(URL, params=QUERY, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
-        return r.json().get("list", []) if r.status_code == 200 else []
-    except (requests.RequestException, ValueError):
-        return []
+    found: dict[int, dict] = {}
+    for i, q in enumerate(q for q in CFG.get("habr_queries") or [] if q):
+        if i:
+            time.sleep(1)  # be polite between searches
+        try:
+            r = requests.get(URL, params={"q": q, "type": "all", "sort": "date", "per_page": 50}, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
+            items = r.json().get("list", []) if r.status_code == 200 else []
+        except (requests.RequestException, ValueError, AttributeError):
+            items = []
+        for v in items:
+            if isinstance(v, dict) and v.get("id") is not None:
+                found.setdefault(v["id"], v)
+    return list(found.values())
 
 
 def _description(href: str, fallback: str) -> str:

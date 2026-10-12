@@ -15,6 +15,8 @@ if not CONFIG_PATH.exists():
 CFG = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
 
 NEEDS_DESCRIPTION = "needs_description"
+# hh work_format ids the candidate accepts: REMOTE, HYBRID, ON_SITE (config.yaml work_formats)
+WORK_FORMATS = CFG.get("work_formats") or [CFG.get("required_work_format", "REMOTE")]
 
 
 @dataclass
@@ -45,8 +47,8 @@ def evaluate(vacancy: dict, description: str | None = None) -> Verdict:
     full = (description or "").lower()
     formats = {f.get("id") for f in vacancy.get("work_format") or []}
 
-    if CFG["required_work_format"] not in formats:
-        return Verdict(True, "low", "not remote")
+    if not any(f in formats for f in WORK_FORMATS):
+        return Verdict(True, "low", "work format")
 
     sen = CFG["seniority"]
     if _has(title, sen["skip"]) and not _has(title, sen["ok_markers"]):

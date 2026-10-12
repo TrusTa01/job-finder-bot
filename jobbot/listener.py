@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 import requests
 
 from . import candidates, getmatch, habr, hh, llm, notify, settings, stats, store, tgchannels
-from .filters import CFG
+from .filters import CFG, WORK_FORMATS
 from .outreach import conf as outreach_conf, targets as outreach_targets
 from .settings import ROOT
 from .notify import API, DISMISS, applied_label, dismiss_markup, fill_contacts, ready_answers
@@ -116,11 +116,14 @@ def _format_answers(items: list[tuple[str, str]]) -> str:
 HELP_PATH = ROOT / "docs" / "bot-help.txt"
 
 
+FORMAT_NAMES = {"REMOTE": "удалённо", "HYBRID": "гибрид", "ON_SITE": "офис"}
+
+
 def _sources_text() -> str:
     """The "where the bot searches" list, built from the config and the source modules, so every copy shows its own."""
     queries = list(dict.fromkeys(q["text"] for q in CFG["search"]["queries"]))
     lines = [
-        f"- hh.ru, при каждом запуске бота. Формат: {'удалённо' if CFG.get('required_work_format') == 'REMOTE' else 'любой'}. "
+        f"- hh.ru, при каждом запуске бота. Формат: {', '.join(FORMAT_NAMES.get(f, f) for f in WORK_FORMATS)}. "
         f"Запросы: {', '.join(queries)}.",
         f"- Habr Career, раз в {habr.CHECK_EVERY_SECONDS // 3600} ч.",
         f"- GetMatch, раз в {getmatch.CHECK_EVERY_SECONDS // 3600} ч.",

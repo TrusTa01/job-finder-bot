@@ -4,16 +4,20 @@ LLM screening, a draft letter, storage and the Telegram report. hh.ru has its ow
 import re
 
 from . import llm, notify, store
-from .filters import CFG, priority_after_screen
+from .filters import CFG, WORK_FORMATS, priority_after_screen
 from .settings import PROFILE_PATH
 
 SENT, DROPPED, SAVED, RETRY, BUDGET = "sent", "dropped", "saved", "retry", "budget"
-OFFICE = re.compile("на месте|в офисе|офисн|очно|гибрид", re.I)
+ACCEPTS_OFFICE = "ON_SITE" in WORK_FORMATS
+# Hybrid counts as office work only when the config does not accept hybrid
+OFFICE = re.compile("на месте|в офисе|офисн|очно" + ("" if "HYBRID" in WORK_FORMATS else "|гибрид"), re.I)
 REMOTE = re.compile("удал|remote|из дома", re.I)
 
 
 def onsite_only(entry: dict, description: str) -> bool:
-    """Office or hybrid work and no mention of remote work: not for us, whatever the source (hh filters by format itself)."""
+    """Office or hybrid work and no mention of remote work: not for us, whatever the source. Skipped when the config accepts on-site work."""
+    if ACCEPTS_OFFICE:
+        return False
     text = " ".join([(entry.get("area") or {}).get("name", ""), entry.get("name") or "", description or ""])
     return bool(OFFICE.search(text)) and not REMOTE.search(text)
 

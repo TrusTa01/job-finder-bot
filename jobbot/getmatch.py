@@ -10,15 +10,15 @@ import time
 import requests
 
 from . import candidates, store
+from .filters import CFG
 
 URL = "https://getmatch.ru/api/offers"
 PAGE = 100
-SIGNALS = ("flutter", "dart")
-NOT_A_DEV_ROLE = (
-    "qa", "aqa", "тестир", "analyst", "аналитик", "менеджер", "manager", "маркет", "медиабайер",
-    "руководитель", "lead", "тимлид", "head", "director", "директор",
-)
-NATIVE_ONLY = ("android", "андроид", "ios", "kotlin", "swift")  # a Flutter signal in skills alone is not enough
+# Words come from config.yaml: secondary_terms (relevant), secondary_exclude_titles (never these roles),
+# secondary_exclude_if_no_term (skipped unless the position also names a term: e.g. native Android/iOS for Flutter)
+SIGNALS = tuple(w.lower() for w in CFG.get("secondary_terms") or [])
+NOT_A_DEV_ROLE = tuple(w.lower() for w in CFG.get("secondary_exclude_titles") or [])
+NATIVE_ONLY = tuple(w.lower() for w in CFG.get("secondary_exclude_if_no_term") or [])
 CHECK_EVERY_SECONDS = 3 * 3600
 MAX_PER_RUN = 5
 

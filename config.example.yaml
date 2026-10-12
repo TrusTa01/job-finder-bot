@@ -10,8 +10,22 @@ search:
     - { text: "Python разработчик", field: name }
     - { text: "Python",             field: all }
 
-# Only vacancies whose work_format contains this value are kept (REMOTE | HYBRID | ON_SITE)
-required_work_format: REMOTE
+# hh work formats the candidate accepts (REMOTE | HYBRID | ON_SITE); a vacancy must offer at least one.
+# Office posts from Habr, GetMatch and Telegram are dropped unless ON_SITE is listed (hybrid ones unless HYBRID is listed).
+work_formats: [REMOTE]
+
+# Prompt texts for the LLM (screening, letters, answers): a file from prompts/ that matches your field.
+prompts: prompts/example.yaml
+# Hours on contact in Moscow time; replaces {availability} in the prompts.
+availability_msk: "07:00 до 16:00"
+# Labels for the stack value of the screening prompt and for the form_answers keys on the card (a key without a label is shown as is).
+stack_labels: {}
+form_labels: {}
+# Habr Career and GetMatch: searches, what makes a vacancy relevant, what to skip. Empty = nothing is found there.
+habr_queries: ["Python"]
+secondary_terms: ["python"]
+secondary_exclude_titles: ["qa", "тестир", "analyst", "аналитик", "менеджер", "manager"]
+secondary_exclude_if_no_term: []
 
 salary:
   filter: false                      # true would hide low salaries; by default salary only sets priority
