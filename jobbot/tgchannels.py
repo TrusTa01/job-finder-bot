@@ -18,7 +18,18 @@ CHANNELS = tuple(CFG.get("telegram_channels") or ())  # channel names without @,
 CHECK_EVERY_SECONDS = 2 * 3600
 MAX_PER_RUN = 5
 MAX_AGE_DAYS = 30
-SIGNAL = re.compile(r"flutter|\bdart\b", re.I)
+DEFAULT_SIGNAL = re.compile(r"flutter|\bdart\b", re.I)  # used when outreach.profile_terms is not set
+_signal_cache: list = []
+
+
+def signal() -> re.Pattern:
+    """What a post must mention to count: the user's words from outreach.profile_terms (short ones such as "dart" need word
+    borders), so a channel that discovery accepted for those words is also read for them; flutter or dart when not configured."""
+    if not _signal_cache:
+        from .outreach import conf  # here, not at the top: outreach imports this module
+        parts = [(r"\b%s\b" if len(w) <= 4 else "%s") % re.escape(w) for w in conf.terms()]
+        _signal_cache.append(re.compile("|".join(parts), re.I) if parts else DEFAULT_SIGNAL)
+    return _signal_cache[0]
 SENIOR = re.compile(r"senior|сеньор|\blead\b|тимлид|ведущий|head of|principal|staff", re.I)
 LEVEL_OK = re.compile(r"middle|junior|джун|миддл|стаж|trainee|\bintern\b", re.I)
 CV_POST = re.compile(r"#ищу|#резюме|#cv\b|ищу работу", re.I)
@@ -88,7 +99,7 @@ def _posts(page: str) -> list[dict]:
 
 def _relevant(text: str) -> bool:
     head = text[:300]
-    if not SIGNAL.search(text) or CV_POST.search(text):
+    if not signal().search(text) or CV_POST.search(text):
         return False
     return not (SENIOR.search(head) and not LEVEL_OK.search(head))
 

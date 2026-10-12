@@ -17,6 +17,7 @@ LISTING_HOSTS = ("vc.ru", "habr.com")      # content sites: an article there may
 COMPANY_ON_AGGREGATOR = ("career.habr.com",)  # the company page links to the company's own site, which is the real target
 MAX_LISTING_LINKS = 40
 MAX_CHANNELS_PER_PAGE = 10
+CHANNEL_RECHECK_DAYS = 30  # a loaded channel that did not fit is looked at again after this long
 MAX_PAGE = 5            # how deep into the results one query goes before it rests
 DRY_RUNS_TO_REST = 2    # runs without a single new page before a query rests
 
@@ -24,12 +25,17 @@ DRY_RUNS_TO_REST = 2    # runs without a single new page before a query rests
 def _queries() -> list[str]:
     """Every search query: each template for each profile term."""
     templates = conf.cfg()["search_queries"]
-    return list(dict.fromkeys(t.format(term=term) for term in conf.terms() for t in templates))
+    # replace, not str.format: a template with other braces ("{city}", a literal "{") must not crash every pass
+    return list(dict.fromkeys(t.replace("{term}", term) for term in conf.terms() for t in templates))
+
+
+def _is_content_site(url: str) -> bool:
+    host = web.host(url)
+    return any(host == h or host.endswith("." + h) for h in LISTING_HOSTS)
 
 
 def _worth_queueing(url: str) -> bool:
-    host = web.host(url)
-    return bool(host) and (not targets.excluded(url) or any(host == h or host.endswith("." + h) for h in LISTING_HOSTS))
+    return bool(web.host(url)) and (not targets.excluded(url) or _is_content_site(url))
 
 
 def _jobs(limit: int, state: dict, now: int) -> list[tuple[str, int]]:
@@ -84,7 +90,10 @@ def find(db, force: bool = False) -> dict:
     count_queries(db, provider, len(jobs))
     known = targets.known_keys(db)
     for job, hits in per_job.items():
-        fresh = sum(bool(_worth_queueing(h["url"]) and targets.domain_key(h["url"]) not in known and targets.queue(db, h["url"], "search")) for h in hits)
+        # one queue entry per company site (its /about, /services and /contacts would each cost an LLM call); content sites
+        # such as vc.ru are listed per article, since each article is a different list of studios
+        fresh = sum(bool(_worth_queueing(h["url"]) and targets.domain_key(h["url"]) not in known
+                         and targets.queue(db, h["url"], "search", by_host=not _is_content_site(h["url"]))) for h in hits)
         stats["queued"] += fresh
         _learn(state, job, fresh, now, int(settings["rest_days"]))
     store.set_meta(db, "outreach_query_state", json.dumps(state, ensure_ascii=False))
@@ -97,12 +106,14 @@ def _add_company(db, url: str, page: str, verdict: dict, source: str, stats: dic
         return
     site, contact_page = url, page
     if web.host(url) in COMPANY_ON_AGGREGATOR:
+        # The first outside link of a Habr company page may be a social network, a counter or an advert, so it is not trusted
+        # as "the company's site": its root only goes to the queue, and the page itself is classified like any other.
         own = next((link for link in web.links_of(page, url) if not targets.excluded(link) and web.host(link) != web.host(url)), None)
-        if not own:
-            return
-        parts = urlparse(own)
-        site = f"{parts.scheme}://{parts.netloc}/"
-        contact_page = web.fetch(site) or ""
+        if own:
+            parts = urlparse(own)
+            if targets.domain_key(f"{parts.scheme}://{parts.netloc}/") not in targets.known_keys(db):
+                targets.queue(db, f"{parts.scheme}://{parts.netloc}/", "habr", by_host=True)
+        return
     if targets.excluded(site):
         return
     emails, names = web.emails_of(contact_page), web.tme_names(contact_page)
@@ -133,7 +144,7 @@ def _add_listing(db, url: str, page: str, verdict: dict, stats: dict) -> None:
             continue
         parts = urlparse(link)
         root = f"{parts.scheme}://{parts.netloc}/"
-        if targets.domain_key(root) not in known and targets.queue(db, root, "listing"):
+        if targets.domain_key(root) not in known and targets.queue(db, root, "listing", by_host=True):
             queued += 1
         if queued >= MAX_LISTING_LINKS:
             break
@@ -142,15 +153,24 @@ def _add_listing(db, url: str, page: str, verdict: dict, stats: dict) -> None:
 def consider_channel(db, name: str) -> bool:
     """Connect a public Telegram channel when its recent posts mention the user's field. True when it was added."""
     key = "tgch:" + name.lower()
-    if targets.source_known(db, key) or name.lower() in {c.lower() for c in tgchannels.channels(db)}:
+    if name.lower() in {c.lower() for c in tgchannels.channels(db)}:
         return False
-    posts = tgchannels._posts(tgchannels._fetch(name))
-    words = [t.lower() for t in conf.terms()]
+    row = targets.source_row(db, key)
+    stale = row is not None and row["kind"] == "checked_channel" and time.time() - (row["last_checked"] or 0) > CHANNEL_RECHECK_DAYS * 86400
+    if row is not None and not stale:
+        return False  # connected, removed by the user, or looked at recently
+    page = tgchannels._fetch(name)
+    if not page:
+        return False  # unreachable (proxy down, rate limit) is not a verdict on the channel: it is looked at again on a later pass
     url = f"https://t.me/s/{name}"
-    if not posts or not any(w in p["text"].lower() for p in posts for w in words):
-        targets.register_source(db, key, "checked_channel", name, url)  # remembered, so it is not fetched again
+    # the same test the channel is read with afterwards (tgchannels), so "connected" means its posts can become candidates
+    if not any(tgchannels.signal().search(p["text"]) for p in tgchannels._posts(page)):
+        targets.touch_checked(db, key, name, url)  # loaded fine, but not about the user's field: not asked again for a while
         return False
     tgchannels.remember_channel(db, name)
+    if row is not None:
+        targets.promote_channel(db, key)
+        return True
     return targets.register_source(db, key, "channel", name, url)
 
 
@@ -170,10 +190,10 @@ def process(db, limit: int) -> dict:
         url = row["url"]
         page = web.fetch(url)
         if page is None:
-            targets.finish_candidate(db, row["key"])
+            targets.fail_candidate(db, row["key"])  # a timeout or a robots.txt that did not load: tried again later, three times in all
             continue
         try:
-            verdict, usage = llm.triage_page(conf.terms(), url, web.title_of(page), web.text_of(page))
+            verdict, usage = llm.triage_page(conf.terms(), url, web.title_of(page), web.text_of(page), conf.cfg()["exclude_terms"])
             store.log_usage(db, *usage)
         except RuntimeError:
             break  # the model is down: the page stays queued for the next pass

@@ -39,7 +39,8 @@ CREATE TABLE IF NOT EXISTS targets (
 -- Pages and channels the outreach discovery found on its own (status active | removed by the user).
 CREATE TABLE IF NOT EXISTS found_sources (
     key TEXT PRIMARY KEY, kind TEXT, name TEXT, url TEXT,
-    status TEXT NOT NULL, first_seen INTEGER, last_checked INTEGER
+    status TEXT NOT NULL, first_seen INTEGER, last_checked INTEGER,
+    tries INTEGER DEFAULT 0       -- failed fetches of a queued page
 );
 """
 
@@ -55,6 +56,11 @@ def connect() -> sqlite3.Connection:
             db.commit()
         except sqlite3.OperationalError:
             pass
+    try:  # found_sources.tries for databases created before it existed
+        db.execute("ALTER TABLE found_sources ADD COLUMN tries INTEGER DEFAULT 0")
+        db.commit()
+    except sqlite3.OperationalError:
+        pass
     return db
 
 

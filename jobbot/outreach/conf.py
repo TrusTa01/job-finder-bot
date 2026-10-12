@@ -7,11 +7,11 @@ DEFAULTS = {
     "profile_terms": [],          # what the user does, for example ["flutter", "dart"]; search queries and relevance checks use it
     "exclude_terms": [],
     "search_queries": [
-        "студия разработки мобильных приложений {term}",
+        "студия разработки {term}",
         "{term} разработка под ключ студия",
         "аутстафф разработчиков {term}",
         "{term} разработчики аутсорс компания",
-        "заказать мобильное приложение на {term}",
+        "заказать разработку на {term}",
         "команда {term} разработчиков для проекта",
         "{term} development studio outsourcing",
         "hire {term} developers agency remote",
@@ -27,6 +27,10 @@ DEFAULTS = {
         "hh.ru", "habr.com", "vc.ru", "t.me", "telegram.org", "github.com", "youtube.com", "vk.com", "linkedin.com",
         "facebook.com", "instagram.com", "twitter.com", "x.com", "wikipedia.org", "google.com", "yandex.ru", "ya.ru",
         "dzen.ru", "apple.com", "play.google.com", "rustore.ru", "medium.com", "pikabu.ru", "avito.ru", "superjob.ru",
+        # social networks, CDNs, counters and ad networks that a company page links to
+        "telegram.me", "ok.ru", "wa.me", "youtu.be", "tiktok.com", "rutube.ru", "behance.net", "dribbble.com", "habr.io", "habrastorage.org",
+        "mail.ru", "yandex.com", "yandex.net", "cloudflare.com", "gstatic.com", "googleapis.com", "googletagmanager.com",
+        "google-analytics.com", "doubleclick.net", "apps.apple.com",
     ],
     "discovery": {
         "enabled": True,
@@ -41,11 +45,34 @@ DEFAULTS = {
 }
 
 
+def _fits(default, value) -> bool:
+    if isinstance(default, bool):
+        return isinstance(value, bool)
+    if isinstance(default, (int, float)):
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    return isinstance(value, type(default))
+
+
+def _merge(defaults: dict, user) -> dict:
+    """The user's values over the defaults. A key with nothing after it in YAML is None, and a value of the wrong type is a
+    typo: both keep the default instead of crashing every pass later. Lists of words keep only their non-empty strings."""
+    user = user if isinstance(user, dict) else {}
+    out = {}
+    for key, default in defaults.items():
+        value = user.get(key)
+        if isinstance(default, dict):
+            out[key] = {**_merge(default, value), **{k: v for k, v in (value if isinstance(value, dict) else {}).items() if k not in default}}
+        elif value is None or not _fits(default, value):
+            out[key] = default
+        elif isinstance(default, list) and all(isinstance(x, str) for x in default):
+            out[key] = [x.strip() for x in value if isinstance(x, str) and x.strip()]
+        else:
+            out[key] = value
+    return {**{k: v for k, v in user.items() if k not in defaults and v is not None}, **out}
+
+
 def cfg() -> dict:
-    user = CFG.get("outreach") or {}
-    merged = {**DEFAULTS, **user}
-    merged["discovery"] = {**DEFAULTS["discovery"], **(user.get("discovery") or {})}
-    return merged
+    return _merge(DEFAULTS, CFG.get("outreach"))
 
 
 def enabled(db) -> bool:

@@ -112,8 +112,27 @@ def register_source(db, key: str, kind: str, name: str, url: str) -> bool:
     return bool(cur.rowcount)
 
 
+def source_row(db, key: str) -> sqlite3.Row | None:
+    return db.execute("SELECT * FROM found_sources WHERE key=?", (key,)).fetchone()
+
+
 def source_known(db, key: str) -> bool:
-    return db.execute("SELECT 1 FROM found_sources WHERE key=?", (key,)).fetchone() is not None
+    return source_row(db, key) is not None
+
+
+def touch_checked(db, key: str, name: str, url: str) -> None:
+    """A channel that was loaded and did not mention the user's field: remembered, and looked at again only after a while."""
+    db.execute(
+        "INSERT INTO found_sources (key, kind, name, url, status, first_seen, last_checked) VALUES (?, 'checked_channel', ?, ?, 'active', ?, ?) "
+        "ON CONFLICT(key) DO UPDATE SET last_checked=excluded.last_checked", (key, name, url, int(time.time()), int(time.time())),
+    )
+    db.commit()
+
+
+def promote_channel(db, key: str) -> None:
+    """A channel that was checked earlier and now fits becomes a real, listed source."""
+    db.execute("UPDATE found_sources SET kind='channel', status='active', first_seen=?, last_checked=? WHERE key=?", (int(time.time()), int(time.time()), key))
+    db.commit()
 
 
 SHOWN_KINDS = ("listing", "channel")  # what /sources lists; candidate and checked_channel rows are internal bookkeeping
@@ -141,20 +160,39 @@ def sources_since(db, ts: int) -> list[sqlite3.Row]:
 
 # --- the queue of pages waiting for the LLM ---------------------------------------------------
 
-def queue(db, url: str, source: str) -> bool:
-    """Put a page in the queue once; a page seen before (done or removed) is not queued again."""
+MAX_TRIES = 3          # fetch attempts per queued page
+RETRY_AFTER = 3600     # seconds before a failed page is tried again
+
+
+def queue(db, url: str, source: str, by_host: bool = False) -> bool:
+    """Put a page in the queue once; a page seen before (done or removed) is not queued again.
+    by_host: one queue entry per site, whatever page of it was found (many pages of one studio would each cost an LLM call)."""
+    key = "cand:host:" + web.host(url) if by_host else "cand:" + url[:300]
     cur = db.execute(
-        "INSERT OR IGNORE INTO found_sources (key, kind, name, url, status, first_seen, last_checked) VALUES (?, 'candidate', ?, ?, 'queued', ?, 0)",
-        ("cand:" + url[:300], source, url, int(time.time())),
+        "INSERT OR IGNORE INTO found_sources (key, kind, name, url, status, first_seen, last_checked, tries) VALUES (?, 'candidate', ?, ?, 'queued', ?, 0, 0)",
+        (key, source, url, int(time.time())),
     )
     db.commit()
     return bool(cur.rowcount)
 
 
 def next_queued(db, n: int) -> list[sqlite3.Row]:
-    return db.execute("SELECT * FROM found_sources WHERE kind='candidate' AND status='queued' ORDER BY first_seen LIMIT ?", (n,)).fetchall()
+    """Oldest first; a page that failed to load waits RETRY_AFTER before its next attempt and goes behind the fresh ones."""
+    return db.execute(
+        "SELECT * FROM found_sources WHERE kind='candidate' AND status='queued' AND last_checked<=? ORDER BY last_checked, first_seen LIMIT ?",
+        (int(time.time()) - RETRY_AFTER, n),
+    ).fetchall()
 
 
 def finish_candidate(db, key: str) -> None:
     db.execute("UPDATE found_sources SET status='done', last_checked=? WHERE key=?", (int(time.time()), key))
+    db.commit()
+
+
+def fail_candidate(db, key: str) -> None:
+    """The page could not be loaded (timeout, robots.txt unreachable, rate limit): try again on a later pass, MAX_TRIES times in all."""
+    db.execute(
+        "UPDATE found_sources SET tries=COALESCE(tries,0)+1, last_checked=?, status=CASE WHEN COALESCE(tries,0)+1>=? THEN 'done' ELSE 'queued' END WHERE key=?",
+        (int(time.time()), MAX_TRIES, key),
+    )
     db.commit()

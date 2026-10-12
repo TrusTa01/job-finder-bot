@@ -49,6 +49,16 @@ def _handle(callback: dict, chat: str) -> None:
         _target_action(data, target)
 
 
+def _target_allows(status: str, action: str) -> bool:
+    """Replied and not-interested are final. After "wrote" only the outcome buttons count: pressing "wrote" on an old card
+    would schedule a second reminder, and "later" would take the target out of the wait for an answer."""
+    if status in ("replied", "dead"):
+        return False
+    if status == "sent":
+        return action in ("reply", "dead")
+    return True
+
+
 def _target_action(data: str, target: dict) -> None:
     """Buttons of an outreach card: t:sent|reply|later|dead:<target id>."""
     parts = data.split(":")
@@ -58,6 +68,9 @@ def _target_action(data: str, target: dict) -> None:
     db = store.connect()
     row = outreach_targets.get(db, target_id)
     if not row:
+        return
+    if not _target_allows(row["status"], action):  # an old card or reminder still in the chat: the target has moved on
+        _call("editMessageReplyMarkup", {**target, "reply_markup": {"inline_keyboard": []}})
         return
     if action == "sent":
         outreach_targets.mark_sent(db, target_id)

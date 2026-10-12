@@ -10,6 +10,7 @@ import time
 from urllib.parse import urljoin, urlparse
 
 import requests
+import urllib3
 
 UA = "Mozilla/5.0 (compatible; job-autofinder personal bot)"
 HOST_DELAY = 2.0          # seconds between requests to one host
@@ -181,7 +182,7 @@ def _peer_is_public(r) -> bool:
         return False
 
 
-def _open(url: str, check_robots: bool, timeout: int = 25):
+def _open(url: str, check_robots: bool):
     """GET with redirects followed by hand: every hop must be http(s) to a public address (a public site must not be able to
     send the bot to 127.0.0.1 or a cloud metadata address) and, for pages, allowed by that host's robots.txt.
     Returns an open streaming response, or None. The caller closes it."""
@@ -202,7 +203,7 @@ def _open(url: str, check_robots: bool, timeout: int = 25):
             _last_hit[p.netloc] = time.time()
         try:
             with _guarded():  # no proxy from the environment either: the guard must see the real destination
-                r = requests.get(url, headers={"User-Agent": UA, "Accept-Language": "ru,en;q=0.8"}, timeout=timeout, stream=True,
+                r = requests.get(url, headers={"User-Agent": UA, "Accept-Language": "ru,en;q=0.8"}, timeout=(10, 10), stream=True,
                                  allow_redirects=False, proxies={"http": None, "https": None})
         except requests.RequestException:
             return None
@@ -224,7 +225,7 @@ def _allowed(url: str) -> bool:
     p = urlparse(url)
     base = f"{p.scheme}://{p.netloc}"
     if base not in _robots:
-        r = _open(base + "/robots.txt", check_robots=False, timeout=20)
+        r = _open(base + "/robots.txt", check_robots=False)
         if r is None:
             _robots[base] = None  # unreachable or refused: skip the host this run
         else:
@@ -232,7 +233,7 @@ def _allowed(url: str) -> bool:
             try:
                 body = _read(r) if r.status_code < 400 else b""
                 text = None if body is None else body.decode("utf-8", "replace")
-            except (requests.RequestException, OSError):
+            except (requests.RequestException, urllib3.exceptions.HTTPError, OSError):
                 text = None
             _robots[base] = None if r.status_code >= 500 or text is None else Robots(text)
             r.close()
@@ -240,8 +241,28 @@ def _allowed(url: str) -> bool:
     return rules is not None and rules.allows((p.path or "/") + ("?" + p.query if p.query else ""))
 
 
+FETCH_SECONDS = 45  # the whole fetch: robots.txt, redirects, headers and body
+
+
 def fetch(url: str) -> str | None:
-    """HTML of a public page, or None when it is refused, unreachable or not HTML."""
+    """HTML of a public page, or None when it is refused, unreachable, not HTML or not done within FETCH_SECONDS in total.
+    requests has no total timeout (each socket read gets its own, restarted by every byte), so a server dripping its
+    headers or body would hold the pass for ever; the work runs in a daemon thread that is simply given up on."""
+    box: list[str | None] = []
+
+    def work() -> None:
+        try:
+            box.append(_fetch(url))
+        except Exception:  # noqa: BLE001 - a fetch must never end in a traceback: it could carry the url, and the pass goes on
+            box.append(None)
+
+    worker = threading.Thread(target=work, daemon=True)
+    worker.start()
+    worker.join(FETCH_SECONDS)
+    return box[0] if box else None
+
+
+def _fetch(url: str) -> str | None:
     r = _open(url, check_robots=True)
     if r is None:
         return None
@@ -251,7 +272,7 @@ def fetch(url: str) -> str | None:
         raw = _read(r)
         if raw is None:
             return None
-    except (requests.RequestException, OSError):
+    except (requests.RequestException, urllib3.exceptions.HTTPError, OSError):
         return None
     finally:
         r.close()

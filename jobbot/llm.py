@@ -152,8 +152,9 @@ TRIAGE_SYSTEM = """Ты помогаешь кандидату искать ра�
 }
 page_type: "company" страница одной компании; "listing" каталог, рейтинг или статья со списком многих студий и компаний; "job_channels" список Telegram-каналов или чатов с вакансиями; "other" всё остальное (новость, блог, магазин, вакансия на агрегаторе).
 relevant = true, если компания разрабатывает или нанимает людей в области кандидата (студия, аутсорс, аутстафф, IT-агентство, продуктовая компания с такой разработкой), либо listing и job_channels явно посвящены этой области. Если компания к области кандидата отношения не имеет, relevant = false.
+Если дан список «НЕ РАССМАТРИВАЕТ»: когда компания работает только с этими технологиями или направлениями и не упоминает область кандидата, relevant = false. Если рядом с ними она работает и в области кандидата, relevant может быть true.
 kind: studio заказная разработка, outstaff аренда специалистов, agency рекрутинговое или IT-агентство, product компания с собственным продуктом.
-contact_name и contact_role заполняй только если человек, отвечающий за разработку или найм (CTO, технический директор, руководитель мобильной разработки, основатель), назван на странице прямо; иначе пустые строки. Ничего не выдумывай.
+contact_name и contact_role заполняй только если человек, отвечающий за разработку или найм (CTO, технический директор, руководитель разработки или направления кандидата, основатель), назван на странице прямо; иначе пустые строки. Ничего не выдумывай.
 Верни только JSON."""
 
 PITCH_SYSTEM = """Ты пишешь первое сообщение от соискателя человеку, который решает, нужен ли ему разработчик: техническому директору, руководителю разработки или основателю студии или компании. Это не отклик на вакансию, вакансии может не быть. Верни JSON {"message": "..."}.
@@ -186,9 +187,12 @@ ANSWER_SYSTEM = """Ты помогаешь кандидату отвечать �
 - Без эмодзи, лести и шаблонной вежливости. Если вопрос непонятен, задай уточняющий вопрос одной фразой. Верни только JSON."""
 
 
-def triage_page(terms: list[str], url: str, title: str, text: str) -> tuple[dict, tuple]:
-    """Outreach: what kind of page this is and whether the company is relevant to the candidate's field."""
-    user = f"КЛЮЧЕВЫЕ СЛОВА СПЕЦИАЛЬНОСТИ КАНДИДАТА: {', '.join(terms) or 'не заданы'}\n\nСТРАНИЦА: {url}\nЗаголовок: {title}\nТекст: {text[:3500]}"
+def triage_page(terms: list[str], url: str, title: str, text: str, exclude_terms: list[str] | None = None) -> tuple[dict, tuple]:
+    """Outreach: what kind of page this is and whether the company is relevant to the candidate's field.
+    exclude_terms (outreach.exclude_terms): technologies or directions the candidate does not consider."""
+    avoid = f"НЕ РАССМАТРИВАЕТ: {', '.join(exclude_terms)}\n" if exclude_terms else ""
+    user = (f"КЛЮЧЕВЫЕ СЛОВА СПЕЦИАЛЬНОСТИ КАНДИДАТА: {', '.join(terms) or 'не заданы'}\n{avoid}\n"
+            f"СТРАНИЦА: {url}\nЗаголовок: {title}\nТекст: {text[:3500]}")
     out, usage = _post(SCREEN_MODEL, SCREEN_EFFORT, TRIAGE_SYSTEM, user)
     return out, ("triage", SCREEN_MODEL, SCREEN_EFFORT, *_cost(SCREEN_MODEL, usage))
 
