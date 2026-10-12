@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 
 import requests
 
-from . import candidates, getmatch, habr, hh, llm, notify, settings, stats, store, tgchannels
+from . import candidates, getmatch, habr, hh, llm, notify, settings, stats, store, tgchannels, trudvsem
 from .filters import CFG, WORK_FORMATS
 from .outreach import conf as outreach_conf, targets as outreach_targets
 from .settings import ROOT
@@ -130,6 +130,10 @@ def _sources_text() -> str:
         lines.append(f"- Habr Career, раз в {habr.CHECK_EVERY_SECONDS // 3600} ч.")
     if getmatch.SIGNALS:
         lines.append(f"- GetMatch, раз в {getmatch.CHECK_EVERY_SECONDS // 3600} ч.")
+    if CFG.get("trudvsem_queries"):
+        regions = CFG.get("trudvsem_regions") or []
+        where = f" Регионы: {', '.join(map(str, regions))}." if regions else " Вся Россия."
+        lines.append(f"- Работа в России (trudvsem.ru), раз в {trudvsem.CHECK_EVERY_SECONDS // 3600} ч.{where}")
     if tgchannels.CHANNELS:
         lines.append(f"- Telegram-каналы, раз в {tgchannels.CHECK_EVERY_SECONDS // 3600} ч, посты не старше {tgchannels.MAX_AGE_DAYS} дней. "
                      "Только эти каналы (вместо письма бот готовит короткое личное сообщение автору поста):")
