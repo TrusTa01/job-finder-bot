@@ -47,6 +47,9 @@ def _handle(callback: dict, chat: str) -> None:
             _call("editMessageText", {**target, "text": applied_label(True), "reply_markup": {"inline_keyboard": []}})
     elif data.startswith("t:"):
         _target_action(data, target)
+    elif data == "src:close":
+        if not _call("deleteMessage", target).get("ok"):  # older than 48 hours: keep a mark, but no buttons
+            _call("editMessageText", {**target, "text": "Источники: меню закрыто.", "reply_markup": {"inline_keyboard": []}})
     elif data.startswith("src:"):
         name = data[len("src:"):]
         if name in SOURCE_NAMES:
@@ -358,7 +361,8 @@ SWITCH_LABELS = {"hh": "hh.ru", "habr": "Habr Career", "getmatch": "GetMatch", "
 
 def _switch_markup() -> dict:
     """One button per job source: ✅ on, ⛔ off. Pressing one flips it."""
-    return {"inline_keyboard": [[{"text": f"{'✅' if source_on(n) else '⛔'} {SWITCH_LABELS[n]}", "callback_data": f"src:{n}"}] for n in SOURCE_NAMES]}
+    rows = [[{"text": f"{'✅' if source_on(n) else '⛔'} {SWITCH_LABELS[n]}", "callback_data": f"src:{n}"}] for n in SOURCE_NAMES]
+    return {"inline_keyboard": rows + [[{"text": "✖ Закрыть", "callback_data": "src:close"}]]}
 
 
 def _send_switch(chat: str) -> None:
