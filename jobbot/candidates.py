@@ -2,7 +2,7 @@
 LLM screening, a draft letter, storage and the Telegram report. hh.ru has its own loop in run.py.
 """
 from . import llm, notify, store
-from .filters import place_ok, priority_after_screen
+from .filters import in_office_city, place_ok, priority_after_screen
 from .settings import PROFILE_PATH
 
 SENT, DROPPED, SAVED, RETRY, BUDGET = "sent", "dropped", "saved", "retry", "budget"
@@ -37,6 +37,8 @@ def handle(db, profile: str, entry: dict, description: str, direct_message: bool
         decision, usage = llm.screen(profile, entry, description)
         store.log_usage(db, *usage)
         fit, issue = decision.get("fit", "no"), decision.get("location_or_schedule_issue", "")
+        if in_office_city((entry.get("area") or {}).get("name", "")):
+            issue = ""  # same city: the time difference does not apply
         if fit == "no":
             store.save_vacancy(db, entry, "screened_out", fit=fit, reason=decision.get("reason"), stack=decision.get("stack"), desc_hash=desc_hash)
             return DROPPED

@@ -9,7 +9,7 @@ import sys
 from datetime import datetime, timezone
 
 from . import alerts, getmatch, habr, hh, llm, notify, stats, store, tgchannels, trudvsem
-from .filters import CFG, NEEDS_DESCRIPTION, evaluate, priority_after_screen, source_on, sources_problem
+from .filters import CFG, NEEDS_DESCRIPTION, evaluate, in_office_city, priority_after_screen, source_on, sources_problem
 from .settings import PROFILE_PATH
 
 
@@ -117,6 +117,8 @@ def main() -> None:
             store.log_usage(db, *usage)
             fit = decision.get("fit", "no")
             issue = decision.get("location_or_schedule_issue", "")
+            if in_office_city((v.get("area") or {}).get("name", "")):
+                issue = ""  # same city: the time difference does not apply
             if fit == "no":
                 store.save_vacancy(
                     db, v, "screened_out", verdict.priority, fit=fit, reason=decision.get("reason"),

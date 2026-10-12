@@ -61,6 +61,12 @@ def _switched(name: str) -> bool | None:
     return value if isinstance(value, bool) else None
 
 
+def in_office_city(text: str) -> bool:
+    """The vacancy is in one of office_cities: the candidate is on the same clock, so no time difference to mention."""
+    low = text.lower()
+    return any(city in low for city in OFFICE_CITIES)
+
+
 def place_ok(formats: set, text: str) -> bool:
     """Remote is always fine. Office or hybrid is fine only when the text names one of office_cities."""
     if "REMOTE" in formats or REMOTE_RE.search(text):
