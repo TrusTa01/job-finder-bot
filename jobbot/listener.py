@@ -175,10 +175,9 @@ def _send_help(chat) -> None:
     ids = []
     for part in _parts(text):
         ids.append(_call("sendMessage", {"chat_id": chat, "text": part, "disable_web_page_preview": True})["result"]["message_id"])
-    # every part carries the same hide button, which removes all parts of this help at once
+    # only the last part carries the hide button; it removes every part of this help at once
     markup = {"inline_keyboard": [[{"text": "Скрыть справку ❌", "callback_data": "hlp:" + ",".join(map(str, ids))}]]}
-    for mid in ids:
-        _call("editMessageReplyMarkup", {"chat_id": chat, "message_id": mid, "reply_markup": markup})
+    _call("editMessageReplyMarkup", {"chat_id": chat, "message_id": ids[-1], "reply_markup": markup})
 
 
 def _delete_message(message: dict) -> None:
