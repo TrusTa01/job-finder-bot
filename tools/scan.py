@@ -4,7 +4,7 @@ Nothing is sent and nothing is stored. Usage: python scan.py [--days N]
 """
 import argparse
 
-from jobbot.filters import CFG, NEEDS_DESCRIPTION, evaluate
+from jobbot.filters import CFG, NEEDS_DESCRIPTION, evaluate, source_on
 from jobbot.hh import get_description, load_cache, save_cache, search_all
 
 
@@ -13,6 +13,8 @@ def main() -> None:
     ap.add_argument("--days", type=int, default=CFG["search"]["period_days"])
     args = ap.parse_args()
 
+    if not source_on("hh"):
+        raise SystemExit("hh is switched off in config.yaml (sources.hh)")
     found = search_all(args.days)
     cache = load_cache()
     kept, skipped = [], {}

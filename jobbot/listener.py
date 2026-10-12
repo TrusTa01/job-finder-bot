@@ -138,7 +138,7 @@ def _sources_text() -> str:
         lines.append(f"- Telegram-каналы, раз в {tgchannels.CHECK_EVERY_SECONDS // 3600} ч, посты не старше {tgchannels.MAX_AGE_DAYS} дней. "
                      "Только эти каналы (вместо письма бот готовит короткое личное сообщение автору поста):")
         lines += [f"  - @{c}" for c in tgchannels.CHANNELS]
-    lines.append("Другие источники бот не смотрит.")
+    lines.append("Другие источники бот не смотрит." if lines else "Все источники отключены в config.yaml (sources).")
     return chr(10).join(lines)
 
 

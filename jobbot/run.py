@@ -46,8 +46,9 @@ def main() -> None:
             resent += 1
 
     known = store.known_ids(db)
-    found = hh.search_all(args.days) if source_on("hh") else {}
-    if not found and source_on("hh"):
+    hh_on = source_on("hh")
+    found = hh.search_all(args.days) if hh_on else {}
+    if hh_on and not found:
         # A 30-day search never legitimately returns nothing, so hh is unreachable or the session expired
         alerts.problem(
             db, "hh",
@@ -55,10 +56,11 @@ def main() -> None:
         )
         print("no vacancies returned by hh")
         return
-    alerts.recovered(db, "hh", "связь с hh.ru работает.")
+    if hh_on:
+        alerts.recovered(db, "hh", "связь с hh.ru работает.")
 
     new = sorted((v for v in found.values() if v["id"] not in known), key=lambda v: v["published_at"], reverse=True)
-    cache = hh.load_cache()
+    cache = hh.load_cache() if hh_on else {}
     stats = {"found": len(found), "new": len(new), "filtered": 0, "screened_out": 0, "duplicate": 0, "ready": 0, "sent": 0, "resent": resent, "errors": 0, "hh_errors": 0}
     processed = 0
     for v in new:
@@ -123,9 +125,12 @@ def main() -> None:
             if message_id is not None:
                 store.mark_notified(db, v["id"], message_id)
                 stats["sent"] += 1
-    hh.save_cache(cache)
+    if hh_on:
+        hh.save_cache(cache)
 
-    if stats["hh_errors"] and not (stats["ready"] or stats["screened_out"]):
+    if not hh_on:
+        pass  # hh was never contacted, so it has nothing to report or recover
+    elif stats["hh_errors"] and not (stats["ready"] or stats["screened_out"]):
         alerts.problem(
             db, "hh_desc",
             f"hh.ru не отдаёт описания вакансий (ошибок в этом запуске: {stats['hh_errors']}): сессия могла истечь. " + alerts.HH_HELP,
