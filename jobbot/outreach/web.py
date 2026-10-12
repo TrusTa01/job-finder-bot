@@ -1,9 +1,11 @@
 """Polite page fetching for outreach: robots.txt is honoured, hosts are rate limited, private addresses are refused
 (the URLs come from search results). Never prints or logs a URL or an exception text."""
+import contextlib
 import html
 import ipaddress
 import re
 import socket
+import threading
 import time
 from urllib.parse import urljoin, urlparse
 
@@ -91,6 +93,35 @@ def host(url: str) -> str:
     return urlparse(url).netloc.lower().split(":")[0].removeprefix("www.")
 
 
+_guard = threading.local()
+_real_getaddrinfo = socket.getaddrinfo
+
+
+def _guarded_getaddrinfo(host, port, *args, **kwargs):
+    """While a guarded request runs in this thread, name resolution drops every non-public address. The connection is made
+    to the addresses of this very answer, so the name cannot be re-resolved to a private address between check and connect
+    (DNS rebinding). Outside guarded requests (Telegram, the LLM, the search API) it behaves exactly like socket.getaddrinfo."""
+    infos = _real_getaddrinfo(host, port, *args, **kwargs)
+    if not getattr(_guard, "on", False):
+        return infos
+    public = [i for i in infos if ipaddress.ip_address(i[4][0].split("%")[0]).is_global]
+    if not public:
+        raise socket.gaierror("no public address")
+    return public
+
+
+socket.getaddrinfo = _guarded_getaddrinfo  # urllib3 looks the function up at call time, so the patch takes effect
+
+
+@contextlib.contextmanager
+def _guarded():
+    _guard.on = True
+    try:
+        yield
+    finally:
+        _guard.on = False
+
+
 def _public(hostname: str) -> bool:
     try:
         infos = socket.getaddrinfo(hostname, None)
@@ -131,7 +162,9 @@ def _open(url: str, check_robots: bool, timeout: int = 25):
                 time.sleep(wait)
             _last_hit[p.netloc] = time.time()
         try:
-            r = requests.get(url, headers={"User-Agent": UA, "Accept-Language": "ru,en;q=0.8"}, timeout=timeout, stream=True, allow_redirects=False)
+            with _guarded():  # no proxy from the environment either: the guard must see the real destination
+                r = requests.get(url, headers={"User-Agent": UA, "Accept-Language": "ru,en;q=0.8"}, timeout=timeout, stream=True,
+                                 allow_redirects=False, proxies={"http": None, "https": None})
         except requests.RequestException:
             return None
         if not _peer_is_public(r):
