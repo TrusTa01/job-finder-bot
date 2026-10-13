@@ -53,7 +53,7 @@ def main() -> None:
         variant = conf.cfg()["pitch_variants"].get(first["kind"], "contract")
         pitch, _, _ = llm.write_pitch(profile, dict(first), variant)
         letter, subject, _ = llm.write_pitch(profile, dict(first), variant, mail=True)
-        print(f"\nSample message for {first['name']} ({variant}):\n{pitch}\n\nSample letter, subject: {subject}\n{letter}")
+        print(f"\nSample message for {first['name']} ({variant}):\n{pitch}\n\nSample letter, subject: {subject}\n{conf.signed(letter)}")
 
 
 if __name__ == "__main__":

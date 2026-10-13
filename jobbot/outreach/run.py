@@ -40,7 +40,8 @@ def work_cards(db, profile: str, send: bool) -> dict:
                     pitch, _, usage = llm.write_pitch(profile, dict(row), variant)
                     store.log_usage(db, *usage)
                 if mail:
-                    mail_pitch, subject, usage = llm.write_pitch(profile, dict(row), variant, mail=True)
+                    letter, subject, usage = llm.write_pitch(profile, dict(row), variant, mail=True)
+                    mail_pitch = conf.signed(letter)
                     store.log_usage(db, *usage)
             except RuntimeError:
                 break  # the model is down: try again next pass

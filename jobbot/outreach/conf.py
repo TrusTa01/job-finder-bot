@@ -1,5 +1,7 @@
 """Outreach settings: the `outreach:` block of config.yaml over built-in defaults, plus the /hidden on|off switch."""
-from .. import store
+import re
+
+from .. import settings, store
 from ..filters import CFG
 
 DEFAULTS = {
@@ -20,6 +22,7 @@ DEFAULTS = {
     "habr_queries": [],           # Habr Career vacancy searches whose employers become targets
     "kinds": ["studio", "outstaff", "agency", "product"],
     "pitch_variants": {"studio": "contract", "outstaff": "contract", "agency": "later", "product": "staff"},
+    "signature_name": "",         # the name under "С уважением," in e-mail letters; Telegram, e-mail and portfolio links come from .env (APPLY_*, PORTFOLIO_LINKS)
     "max_new_per_day": 10,        # new target cards per rolling 24 hours; cards the user snoozed come back on top of this
     "follow_up_days": 7,          # one reminder this many days after "Написал"
     "later_days": 1,              # a card snoozed with "Позже" comes back after this many days
@@ -83,6 +86,23 @@ def enabled(db) -> bool:
 
 def set_enabled(db, on: bool) -> None:
     store.set_meta(db, "outreach_enabled", "1" if on else "0")
+
+
+def signature_lines() -> list[str]:
+    """Name from config, contacts and portfolio links from .env. Added by code, never written by the model, so nothing is invented."""
+    telegram, email = settings.get("APPLY_TELEGRAM").strip(), settings.get("APPLY_EMAIL").strip()
+    links = [x for x in re.split(r"[\s,;]+", settings.get("PORTFOLIO_LINKS")) if x]
+    lines = [cfg()["signature_name"].strip()]
+    lines += [f"Telegram: @{telegram.lstrip('@')}"] if telegram else []
+    lines += [f"Почта: {email}"] if email else []
+    lines += ([f"Портфолио: {links[0]}"] + links[1:]) if links else []
+    return [x for x in lines if x]
+
+
+def signed(letter: str) -> str:
+    """The e-mail letter with the sign-off and the signature lines."""
+    lines = signature_lines()
+    return letter.rstrip() + "\n\nС уважением" + ("," if lines else "") + "".join("\n" + line for line in lines)
 
 
 def terms() -> list[str]:
