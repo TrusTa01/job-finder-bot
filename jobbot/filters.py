@@ -121,6 +121,18 @@ def salary_rub_net(salary: dict | None) -> int | None:
     return int(value * 0.87) if salary.get("gross") else int(value)
 
 
+def below_salary_floor(vacancy: dict, floor: int) -> bool:
+    """True only for a full-time monthly rouble salary whose top figure (as printed in the ad) is under the floor.
+    No salary, part-time or project work, per-shift or hourly pay and other currencies are never judged here."""
+    if (vacancy.get("employment") or {}).get("id") != "full":
+        return False
+    pay = vacancy.get("salary_range") or vacancy.get("salary") or {}
+    if (pay.get("mode") or {}).get("id", "MONTH") != "MONTH" or pay.get("currency") != "RUR":
+        return False
+    top = pay.get("to") or pay.get("from")
+    return bool(top) and top < floor
+
+
 def evaluate(vacancy: dict, description: str | None = None) -> Verdict:
     title = (vacancy.get("name") or "").lower()
     snippet = vacancy.get("snippet") or {}
@@ -132,6 +144,9 @@ def evaluate(vacancy: dict, description: str | None = None) -> Verdict:
         return Verdict(True, "low", "work format")
     if not place_ok(formats, (vacancy.get("area") or {}).get("name", "")):
         return Verdict(True, "low", "office outside the accepted cities")
+    floor = CFG["salary"].get("min_monthly_rub", 0)
+    if floor and below_salary_floor(vacancy, floor):
+        return Verdict(True, "low", "salary below the minimum")
 
     sen = CFG["seniority"]
     if _has(title, sen["skip"]) and not _has(title, sen["ok_markers"]):

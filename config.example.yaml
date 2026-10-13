@@ -30,7 +30,7 @@ secondary_exclude_titles: ["qa", "тестир", "analyst", "аналитик", 
 secondary_exclude_if_no_term: []
 
 salary:
-  filter: false                      # true would hide low salaries; by default salary only sets priority
+  min_monthly_rub: 0                 # hh.ru only: hide a full-time monthly rouble salary whose top figure is below this (0 = off). No salary, part-time, project, hourly and other currencies are never hidden
   normal_priority_from_rub: 100000   # net; lower or missing -> low priority
 
 seniority:
