@@ -200,9 +200,9 @@ def format_target(row, reminder: bool = False, returned: bool = False) -> str:
         lines.append(about)
     lines += [f"Сайт: {row['site']}", f"Контакт: {contact}" + (f" ({person})" if person else ""), f"Вариант: {PITCH_VARIANTS.get(row['pitch_variant'], row['pitch_variant'] or '')}"]
     if row["pitch"]:
-        lines += ["", "Сообщение в Telegram (отправьте сами):" if row["mail_pitch"] else "Сообщение (отправьте сами):", row["pitch"]]
+        lines += ["", "Сообщение в Telegram:" if row["mail_pitch"] else "Сообщение:", row["pitch"]]
     if row["mail_pitch"]:
-        lines += ["", "Письмо на почту (отправьте сами):", f"Тема: {row['subject']}", "", row["mail_pitch"]]
+        lines += ["", "Письмо на почту:", f"Тема: {row['subject']}", "", row["mail_pitch"]]
     return "\n".join(lines)
 
 

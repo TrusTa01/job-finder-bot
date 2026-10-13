@@ -366,12 +366,12 @@ def _start_rebuild(message: dict) -> None:
     db = store.connect()
     last = int(store.get_meta(db, "rebuild_started", "0"))
     if time.time() - last < 5 * 60:
-        return _reply(message, "Пересборка уже идёт или запускалась недавно. Итог придёт в этот чат.")
+        return _reply(message, "Пересборка уже идёт или запускалась недавно.")
     store.set_meta(db, "rebuild_started", str(int(time.time())))
     with open(ROOT / "data" / "rebuild.log", "a", encoding="utf-8") as log:
         log.write(f"--- {datetime.now().isoformat(timespec='seconds')}\n")
         subprocess.Popen([sys.executable, "-m", "tools.rebuild_drafts"], cwd=str(ROOT), stdout=log, stderr=subprocess.STDOUT)
-    _reply(message, "Пересборка запущена: напишу заново письма для вакансий без ✅ и ✕. Итог придёт сюда.")
+    _reply(message, "Пересборка запущена: напишу заново письма для открытых вакансий.")
 
 
 def _hidden_text(db) -> str:
