@@ -2,7 +2,7 @@
 LLM screening, a draft letter, storage and the Telegram report. hh.ru has its own loop in run.py.
 """
 from . import llm, notify, store
-from .filters import in_office_city, place_ok, priority_after_screen
+from .filters import CFG, in_office_city, place_ok, priority_after_screen
 from .settings import PROFILE_PATH
 
 SENT, DROPPED, SAVED, RETRY, BUDGET = "sent", "dropped", "saved", "retry", "budget"
