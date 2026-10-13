@@ -176,6 +176,22 @@ PITCH_SYSTEM = """Ты пишешь первое сообщение от сои�
 - Закончи лёгким вопросом, на который просто ответить, по варианту сообщения. Без эмодзи, лести и шаблонов вроде «с большим интересом изучил ваш сайт». Верни только JSON."""
 
 
+PITCH_EMAIL_SYSTEM = PITCH_SYSTEM.split("Требования:")[0].replace(
+    'Верни JSON {"message": "..."}.', 'Это письмо на рабочую почту. Верни JSON {"subject": "...", "message": "..."}.'
+) + """Почта не мессенджер: ответного «да, расскажите» ждать нельзя, поэтому письмо сразу даёт факты, а не спрашивает разрешения их прислать.
+Требования:
+- subject: простая инженерная тема, до 60 символов, без капса, восклицательных знаков и рекламных слов, например «Flutter/Dart разработчик, проекты и контракт». Без имени компании в кавычках.
+- message: 4-7 коротких предложений, не больше 900 символов, можно разбить на 2-3 абзаца, без markdown и без списков с эмодзи. По-русски, на «вы», просто, как инженер инженеру.
+- Первая строка «Здравствуйте!» (если имя адресата известно, «<Имя>, здравствуйте!»). Подписи и имени в конце не пиши: подпись добавит отправитель.
+- Сначала одним-двумя фактами из профиля скажи, кто ты и чем занимаешься. Если в профиле есть ссылки на приложения, проекты или GitHub, дай одну-две, дословно как в профиле, каждую с одной фразой о том, что это. Если ссылок в профиле нет, никаких не придумывай и не пиши «ссылка по запросу».
+- Если в профиле указан город и пояснение про часы работы, коротко скажи это одной фразой, но только если компания не из того же города.
+- Затем одной фразой, чем это может быть полезно компании, исходя из её данных, без громких обещаний. Не делай вид, что знаешь внутренние проблемы компании.
+- Не перечисляй стек списком: назови максимум три самые важные технологии. Про проект скажи только, что он делает; не упоминай эксплуатацию и подробности (продакшен, сопровождение, число пользователей, один разработчик, сроки).
+- Используй только факты из профиля. Не называй сроки опыта ни цифрами, ни словами («два года», «около года», «несколько лет»), не называй возраст. Не выдумывай проекты, ссылки, имена, цифры и технологии, которых нет в профиле. Не обещай условий, которых нет в профиле.
+- Не используй длинное и среднее тире (— и –), только обычный дефис и запятые. Без эмодзи, лести и шаблонов вроде «с большим интересом изучил ваш сайт».
+- Закончи лёгким вопросом по варианту сообщения, на который можно ответить одной строкой. Верни только JSON."""
+
+
 def triage_page(terms: list[str], url: str, title: str, text: str, exclude_terms: list[str] | None = None) -> tuple[dict, tuple]:
     """Outreach: what kind of page this is and whether the company is relevant to the candidate's field.
     exclude_terms (outreach.exclude_terms): technologies or directions the candidate does not consider."""
@@ -186,8 +202,10 @@ def triage_page(terms: list[str], url: str, title: str, text: str, exclude_terms
     return out, ("triage", SCREEN_MODEL, SCREEN_EFFORT, *_cost(SCREEN_MODEL, usage))
 
 
-def write_pitch(profile: str, target: dict, variant: str) -> tuple[str, tuple]:
-    """Outreach: first message to a company's technical lead. variant: staff | contract | later."""
+def write_pitch(profile: str, target: dict, variant: str) -> tuple[str, str, tuple]:
+    """Outreach: first message to a company's technical lead, as (message, subject, usage). variant: staff | contract | later.
+    A target reachable only by e-mail gets a letter with a subject line; otherwise a short chat message and an empty subject."""
+    by_mail = target.get("contact_channel") == "email"
     who = target.get("contact_name") or ""
     user = gender_note() + (
         f"ПРОФИЛЬ КАНДИДАТА:\n{profile}\n\nКОМПАНИЯ: {target.get('name') or ''}\nТип: {target.get('kind') or ''}\n"
@@ -195,8 +213,9 @@ def write_pitch(profile: str, target: dict, variant: str) -> tuple[str, tuple]:
         f"Адресат: {who + ', ' + target['contact_role'] if who and target.get('contact_role') else who or 'имя неизвестно'}\n\n"
         f"ВАРИАНТ СООБЩЕНИЯ: {variant}"
     )
-    out, usage = _post(LETTER_MODEL, LETTER_EFFORT, PITCH_SYSTEM, user)
-    return plain_dashes(str(out.get("message", "")).strip()), ("pitch", LETTER_MODEL, LETTER_EFFORT, *_cost(LETTER_MODEL, usage))
+    out, usage = _post(LETTER_MODEL, LETTER_EFFORT, PITCH_EMAIL_SYSTEM if by_mail else PITCH_SYSTEM, user)
+    subject = plain_dashes(" ".join(str(out.get("subject", "")).split()))[:80] if by_mail else ""
+    return plain_dashes(str(out.get("message", "")).strip()), subject, ("pitch", LETTER_MODEL, LETTER_EFFORT, *_cost(LETTER_MODEL, usage))
 
 
 def answer_questions(profile: str, card: str, description: str, ready_answers: str, question: str) -> tuple[list[tuple[str, str]], tuple]:

@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS targets (
     site TEXT, source TEXT, stack_hint TEXT, summary TEXT,
     contact_name TEXT, contact_role TEXT, contact_channel TEXT, contact_value TEXT,
     status TEXT NOT NULL,          -- new | drafted | notified | sent | replied | later | dead
-    pitch TEXT, pitch_variant TEXT,
+    pitch TEXT, pitch_variant TEXT, subject TEXT,  -- subject: the e-mail subject line, empty for Telegram targets
     first_seen INTEGER NOT NULL, notified_at INTEGER, message_id INTEGER,
     sent_at INTEGER, follow_up_at INTEGER, follow_up_sent INTEGER, note TEXT
 );
@@ -56,11 +56,12 @@ def connect() -> sqlite3.Connection:
             db.commit()
         except sqlite3.OperationalError:
             pass
-    try:  # found_sources.tries for databases created before it existed
-        db.execute("ALTER TABLE found_sources ADD COLUMN tries INTEGER DEFAULT 0")
-        db.commit()
-    except sqlite3.OperationalError:
-        pass
+    for table, column in (("found_sources", "tries INTEGER DEFAULT 0"), ("targets", "subject TEXT")):  # columns added after the table was first created
+        try:
+            db.execute(f"ALTER TABLE {table} ADD COLUMN {column}")
+            db.commit()
+        except sqlite3.OperationalError:
+            pass
     return db
 
 

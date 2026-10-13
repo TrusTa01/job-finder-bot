@@ -36,8 +36,8 @@ def get(db, target_id: int) -> sqlite3.Row | None:
     return db.execute("SELECT * FROM targets WHERE id=?", (target_id,)).fetchone()
 
 
-def set_pitch(db, target_id: int, pitch: str, variant: str) -> None:
-    db.execute("UPDATE targets SET pitch=?, pitch_variant=?, status='drafted' WHERE id=?", (pitch, variant, target_id))
+def set_pitch(db, target_id: int, pitch: str, variant: str, subject: str = "") -> None:
+    db.execute("UPDATE targets SET pitch=?, pitch_variant=?, subject=?, status='drafted' WHERE id=?", (pitch, variant, subject, target_id))
     db.commit()
 
 
