@@ -96,6 +96,12 @@ def new_cards_today(db) -> int:
     return db.execute("SELECT COUNT(*) FROM targets WHERE notified_at>=?", (int(time.time()) - DAY,)).fetchone()[0]
 
 
+def next_slot_at(db) -> int:
+    """When the oldest card of the last 24 hours ages out and the daily cap frees one place."""
+    oldest = db.execute("SELECT MIN(notified_at) FROM targets WHERE notified_at>=?", (int(time.time()) - DAY,)).fetchone()[0]
+    return int(oldest) + DAY if oldest else 0
+
+
 def funnel(db) -> dict[str, int]:
     return {r["status"]: r["n"] for r in db.execute("SELECT status, COUNT(*) AS n FROM targets GROUP BY status")}
 

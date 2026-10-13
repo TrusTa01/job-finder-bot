@@ -75,6 +75,10 @@ def send_digest(db) -> None:
     count = lambda where: db.execute(f"SELECT COUNT(*) FROM targets WHERE {where}", (last,)).fetchone()[0]
     waiting = db.execute("SELECT COUNT(*) FROM targets WHERE status IN ('new','drafted')").fetchone()[0]
     lines = [f"🎯 Скрытый рынок за сутки: найдено компаний {count('first_seen>?')}, карточек отправлено {count('notified_at>?')}, ждут своей очереди {waiting}."]
+    cap = int(conf.cfg()["max_new_per_day"])
+    if waiting and targets.new_cards_today(db) >= cap:
+        free_at = datetime.fromtimestamp(targets.next_slot_at(db), alerts.MSK).strftime("%H:%M")
+        lines.append(f"Лимит {cap} карточек в сутки исчерпан, следующая придёт после {free_at} МСК (outreach.max_new_per_day в config.yaml).")
     month, price = time.strftime("%Y-%m", time.gmtime()), float(conf.cfg()["discovery"].get("price_per_query_rub") or 0)
     for provider in conf.cfg()["discovery"]["providers"]:
         day, in_month = _counter(db, f"outreach_q_{provider}_since_digest"), _counter(db, f"outreach_q_{provider}_{month}")
