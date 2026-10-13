@@ -51,8 +51,9 @@ def main() -> None:
     first = db.execute("SELECT * FROM targets ORDER BY id LIMIT 1").fetchone()
     if first and profile and not args.no_pitch:
         variant = conf.cfg()["pitch_variants"].get(first["kind"], "contract")
-        pitch, subject, _ = llm.write_pitch(profile, dict(first), variant)
-        print(f"\nSample message for {first['name']} ({variant}):\n" + (f"Subject: {subject}\n" if subject else "") + pitch)
+        pitch, _, _ = llm.write_pitch(profile, dict(first), variant)
+        letter, subject, _ = llm.write_pitch(profile, dict(first), variant, mail=True)
+        print(f"\nSample message for {first['name']} ({variant}):\n{pitch}\n\nSample letter, subject: {subject}\n{letter}")
 
 
 if __name__ == "__main__":

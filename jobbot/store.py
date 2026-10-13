@@ -32,7 +32,8 @@ CREATE TABLE IF NOT EXISTS targets (
     site TEXT, source TEXT, stack_hint TEXT, summary TEXT,
     contact_name TEXT, contact_role TEXT, contact_channel TEXT, contact_value TEXT,
     status TEXT NOT NULL,          -- new | drafted | notified | sent | replied | later | dead
-    pitch TEXT, pitch_variant TEXT, subject TEXT,  -- subject: the e-mail subject line, empty for Telegram targets
+    pitch TEXT, pitch_variant TEXT,  -- pitch: the short chat message; empty for a target reachable only by e-mail
+    subject TEXT, mail_pitch TEXT,   -- the e-mail subject and letter, empty when the target has no e-mail
     first_seen INTEGER NOT NULL, notified_at INTEGER, message_id INTEGER,
     sent_at INTEGER, follow_up_at INTEGER, follow_up_sent INTEGER, note TEXT
 );
@@ -56,7 +57,7 @@ def connect() -> sqlite3.Connection:
             db.commit()
         except sqlite3.OperationalError:
             pass
-    for table, column in (("found_sources", "tries INTEGER DEFAULT 0"), ("targets", "subject TEXT")):  # columns added after the table was first created
+    for table, column in (("found_sources", "tries INTEGER DEFAULT 0"), ("targets", "subject TEXT"), ("targets", "mail_pitch TEXT")):  # columns added after the table was first created
         try:
             db.execute(f"ALTER TABLE {table} ADD COLUMN {column}")
             db.commit()

@@ -36,8 +36,16 @@ def get(db, target_id: int) -> sqlite3.Row | None:
     return db.execute("SELECT * FROM targets WHERE id=?", (target_id,)).fetchone()
 
 
-def set_pitch(db, target_id: int, pitch: str, variant: str, subject: str = "") -> None:
-    db.execute("UPDATE targets SET pitch=?, pitch_variant=?, subject=?, status='drafted' WHERE id=?", (pitch, variant, subject, target_id))
+def wants(row) -> tuple[bool, bool]:
+    """(chat message, e-mail letter) to draft for a target. A target with both contacts gets both texts; with no contact, the chat one."""
+    channels = (row["contact_channel"] or "").split("+")
+    mail = "email" in channels
+    return (not mail or "telegram" in channels), mail
+
+
+def set_pitch(db, target_id: int, pitch: str, variant: str, subject: str = "", mail_pitch: str = "") -> None:
+    db.execute("UPDATE targets SET pitch=?, pitch_variant=?, subject=?, mail_pitch=?, status='drafted' WHERE id=?",
+               (pitch, variant, subject, mail_pitch, target_id))
     db.commit()
 
 

@@ -34,11 +34,17 @@ def work_cards(db, profile: str, send: bool) -> dict:
                 break
             variant = cfg["pitch_variants"].get(row["kind"], "contract")
             try:
-                pitch, subject, usage = llm.write_pitch(profile, dict(row), variant)
-                store.log_usage(db, *usage)
+                chat, mail = targets.wants(row)
+                pitch = subject = mail_pitch = ""
+                if chat:
+                    pitch, _, usage = llm.write_pitch(profile, dict(row), variant)
+                    store.log_usage(db, *usage)
+                if mail:
+                    mail_pitch, subject, usage = llm.write_pitch(profile, dict(row), variant, mail=True)
+                    store.log_usage(db, *usage)
             except RuntimeError:
                 break  # the model is down: try again next pass
-            targets.set_pitch(db, row["id"], pitch, variant, subject)
+            targets.set_pitch(db, row["id"], pitch, variant, subject, mail_pitch)
             row = targets.get(db, row["id"])
             out["drafted"] += 1
         room -= 1
