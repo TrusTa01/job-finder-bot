@@ -1,42 +1,149 @@
+<div align="center">
+
 # job-autofinder
 
-A personal job-search assistant. Every 15 minutes it looks for new vacancies, filters them, has an LLM screen each one and draft a short cover letter, and sends a report with the link to Telegram. Applications are sent by hand: the bot only prepares them.
+**A personal job-search assistant: it watches several job sources, screens every vacancy with an LLM, drafts a short cover letter and reports to Telegram. I apply by hand.**
 
-## What it does
+![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-state-003B57?logo=sqlite&logoColor=white)
+![DeepSeek](https://img.shields.io/badge/LLM-DeepSeek-4D6BFE)
+![Telegram](https://img.shields.io/badge/Telegram-bot-26A5E4?logo=telegram&logoColor=white)
+![Cron](https://img.shields.io/badge/runs%20from-cron%20on%20a%20VPS-555)
 
-1. **hh.ru search.** Several title and full-text queries, remote vacancies only. Generic titles are kept only when the description mentions the target stack.
-2. **Hard filter.** Stop-list for roles and keywords, seniority check. Salary never filters a vacancy out.
-3. **LLM screening** (`fit`: yes / maybe / no, stack, required grade; the priority label is normal only for a clear fit at junior level without schedule or country problems) and a **cover letter** of a few sentences built only from facts in the candidate profile. See `docs/model-choice.md` for the models and costs.
-4. **Telegram reports** with the vacancy, the verdict and the letter. Undelivered reports are resent on the next run.
-5. **Other sources.** Habr Career, GetMatch and public Telegram job channels (`jobbot/tgchannels.py`, channel list in the module) are checked every few hours with the same LLM screening and draft as hh.ru (`jobbot/candidates.py`). For Telegram channels the draft is a short personal message to the post's author instead of a cover letter, because there you write to a person.
-6. **Buttons and questionnaires** (`jobbot/listener.py`). Every report has ✕ (delete) and "Откликнулся ✅" / "Откликнулась ✅" (records the response; the form follows `candidate_gender` in `config.yaml`); under hh vacancies there is a checklist of which of your resumes fit. When a response has a questionnaire (hh field `has_test`), the report warns about it and lists ready-to-copy answers: `form_answers` in `config.yaml` (salary, city, experience) and `APPLY_PHONE` / `APPLY_TELEGRAM` from `.env`. **Reply to a vacancy card with the employer's questions** and the bot answers them in a developed, letter-like style from the profile (facts only, honest "no, but ready to learn" where something is missing). Your phone number never reaches the model: it sees placeholders that the bot fills in afterwards. Only your chat is served. The bot sends a short user guide (`docs/bot-help.txt`; the list of search sources in it is built from `config.yaml`, so each copy shows its own queries and channels) once on the first start of the listener and on `/help`.
-7. **Alerts** to the same chat when hh.ru is unreachable or the session expired, the model fails, the daily LLM budget is hit or the pass crashes; one daily heartbeat with statistics.
-8. **Direct outreach ("hidden market", optional, off by default).** Many teams hire before a vacancy is published, so this part looks for studios, outsourcing firms and agencies instead of vacancies (`jobbot/outreach/`, its own cron line). The bot finds them itself: a daily web search (Yandex Search API, plus Google through Serper when a key is set; results are merged), catalog and article pages, Habr Career employers and job channels linked from them. An LLM classifies each page, and for every fitting company it drafts a short first message from the profile facts, with the contact found on the company's site. You get a card with buttons (wrote / answered / later / not interested), one reminder after a week, and commands for the funnel and the sources. New sources are connected without approval; `/sources` and `/removesource` undo them. Search words come from `outreach.profile_terms` in the config, nothing is tied to one stack. Switch with `/hidden on|off`. Preview: `python -m tools.outreach_scan`. Setup: `docs/deployment.md`.
+English | [Русский](README.ru.md)
 
-## Heads-up about hh.ru
+</div>
 
-hh.ru closed its API for job seekers on 15 December 2025. Reading vacancies goes through [hh-applicant-tool](https://github.com/s3rgeym/hh-applicant-tool), which emulates the official mobile app. This goes against the service's rules, so there is a risk of the account being blocked. The project is meant for personal, read-only use. The session expires about every two weeks; the bot sends an alert with instructions when that happens.
+> [!NOTE]
+> The bot only prepares drafts. Sending an application is always a manual step; auto-apply is deliberately not built.
 
-## Running
+## Why
 
-Setup:
+Reading a hundred postings to find the five that fit is slow, and generic cover letters do not work. The bot does the reading: it filters out what clearly does not fit, asks a model for a verdict with a reason, and writes a short letter built only from facts in my own profile. I read the card in Telegram, fix the text and send it myself.
 
-1. `python -m venv .venv`, then `pip install -r requirements.txt`.
-2. Authorize `hh-applicant-tool` once on your own machine (it stores the session in `~/.config/hh-applicant-tool`).
-3. Copy `.env.example` to `.env` and `config.example.yaml` to `config.yaml`, then fill them in.
-4. Write a short candidate profile to `data/profile.txt`.
+A card looks like this (an invented example):
 
-Run one pass: `python -m jobbot.run --limit 8` (add `--no-notify` to skip Telegram).
+```
+Backend developer (Python) · Acme Studio
+Fit: maybe · Priority: normal · Grade: junior
+Reason: Python and PostgreSQL match; two years of experience are asked for, the profile has less.
+Attention: none
 
-On a server, run `deploy/run_pass.sh` from cron every 15 minutes. It adds a random delay, takes a lock so passes never overlap, and runs less often at night. Telegram is usually blocked from Russian IPs, so set `TELEGRAM_PROXY_URL` in `.env`.
+Здравствуйте!
+Заинтересовала вакансия Python-разработчика. Работаю с Python и PostgreSQL, ...
+[ ✕ Неинтересно ] [ Откликнулся ✅ ] [ Позже ⏳ ]
+```
 
-## Layout
+## At a glance
 
-- `jobbot/` is the bot: `run.py` (pipeline), `hh.py`, `filters.py`, `llm.py`, `store.py`, `notify.py`, `alerts.py`, `listener.py` (✕ button), `settings.py`, and the secondary sources `habr.py`, `getmatch.py`, `tgchannels.py` with their shared step `candidates.py`. `jobbot/outreach/` is the direct-outreach part: `run.py` (its pass), `discover.py` (search and classification), `search.py` (providers), `web.py` (polite fetching), `targets.py` (storage), `conf.py` (settings and the on/off switch).
-- `deploy/` has the cron wrappers; `docs/deployment.md` is the step-by-step setup guide.
-- `tools/` holds one-off scripts: `scan` (preview matches), `collect_sample` and `llm_eval` (model tests). Run them as `python -m tools.scan`.
-- `data/` is local state (SQLite, caches, profile) and is never committed.
+| | |
+|---|---|
+| Code | 30 Python files, about 4,000 lines |
+| Sources | 5 (hh.ru, Habr Career, GetMatch, Trudvsem, public Telegram channels), each switchable in config or from the chat |
+| State | one SQLite file: seen vacancies, LLM spend, button events, outreach targets |
+| LLM cost | about $0.0005 per screened vacancy (`deepseek-flash`, see [docs/model-choice.md](docs/model-choice.md)); a hard daily budget stops calls and alerts |
+| Runtime | cron every 15 minutes with random jitter and a lock file, a small `systemd` service for the Telegram buttons |
+| History | 97 commits in Conventional Commits style, from 2026-10-08 |
 
-## Secrets
+## Features
 
-Tokens, keys and configs with personal data are not committed (see `.gitignore`). Examples live in `.env.example` and `config.example.yaml`. [gitleaks](https://github.com/gitleaks/gitleaks) scans every push on GitHub (`.github/workflows/gitleaks.yml`), and a local pre-commit hook can do the same before each commit (`winget install Gitleaks.Gitleaks`).
+**Search and filtering**
+- Several title and full-text queries per source, remote-only by default; office and hybrid vacancies pass only for cities listed in the config.
+- Hard filter before any model call: stop lists for roles and keywords, a seniority check, titles without a signal kept only when the description mentions the target stack.
+- Salary never rejects a vacancy, it only changes the priority. One optional exception: a floor for full-time monthly rouble pay.
+- Reposts of the same vacancy from another site are dropped before screening.
+
+**LLM screening and drafts**
+- A verdict (`fit`: yes / maybe / no), the main stack, the required grade and any permanent schedule or country restriction, as strict JSON.
+- A letter of a few sentences built only from the candidate profile, with one honest sentence about a missing requirement instead of an invented skill.
+- Prompts are plain YAML files chosen in the config, so the same code serves other professions.
+- Vacancy text is treated as data: hidden characters are removed and phrases that address an AI are flagged.
+
+**Telegram interface** (`jobbot/listener.py`)
+- Buttons under every card: dismiss, mark as applied, snooze. Dismissed vacancies never come back.
+- Reply to a card with an employer's questionnaire and the bot drafts answers in the same style. Phone and e-mail are placeholders for the model and are filled in by the program afterwards, so they never reach the LLM.
+- Commands for statistics (month, year, all time), interviews and offers, rebuilding drafts, restoring dismissed cards, switching sources and channels. Applications older than 7 days without news count as rejected automatically.
+- Alerts when a source is unreachable, a session expires, the model fails or the daily budget is reached; one heartbeat message a day.
+
+**Direct outreach** (`jobbot/outreach/`, optional, off by default)
+- Finds studios, outsourcing firms and agencies instead of vacancies, drafts a first message with the contact found on the company site and puts a card with buttons into the same chat. A reminder follows after a week.
+- Fetching is polite: `robots.txt` is honoured, hosts are rate limited and private or cloud-metadata addresses are refused.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    S1[hh.ru] --> F
+    S2[Habr Career / GetMatch / Trudvsem] --> F
+    S3[Public Telegram channels] --> F
+    F[Hard filter<br/>filters.py] --> D[(SQLite<br/>dedup + state)]
+    D --> L[LLM screening<br/>+ draft letter<br/>llm.py]
+    L --> N[Telegram report<br/>notify.py]
+    N --> U[Me: read, edit, apply]
+    U -- buttons, replies --> B[Listener service<br/>listener.py]
+    B --> D
+    O[Outreach discovery<br/>optional] --> L
+```
+
+Key decisions:
+- **Cheap steps first.** The filter and the dedup run before the model, so tokens are spent only on plausible vacancies. Screening uses the cheapest model setup: a test on 22 hand-labelled vacancies showed no quality gain from a bigger one.
+- **Config, not code.** Queries, stop words, prompts, sources and limits live in `config.yaml`; the code has no search criteria in it.
+- **One shared step for secondary sources** (`candidates.py`): Habr, GetMatch, Telegram and outreach all go through the same screening, draft and report.
+- **Failure is visible.** Every external failure turns into an alert instead of a silent gap, and undelivered reports are resent on the next pass.
+- **Secrets stay out.** The Telegram token is part of its URL, so exception text and URLs are never printed. gitleaks scans every push.
+
+## A note on sources
+
+Sources are plug-ins. hh.ru is read through the third-party [hh-applicant-tool](https://github.com/s3rgeym/hh-applicant-tool), because the official job-seeker API is closed; this is outside the service's rules, so use an account you can afford to lose. The bot only reads. Other sources use public pages and open APIs.
+
+## Tech stack
+
+| Area | Tools |
+|---|---|
+| Language | Python 3.11+ |
+| Storage | SQLite |
+| LLM | DeepSeek API (OpenAI-compatible); see [docs/model-choice.md](docs/model-choice.md) |
+| Messaging | Telegram Bot API through a SOCKS5 proxy (`requests[socks]`) |
+| Config | YAML (`pyyaml`), `.env` for secrets |
+| Deploy | cron, `flock`, `systemd`; step-by-step in [docs/deployment.md](docs/deployment.md) |
+| CI | GitHub Actions with gitleaks |
+
+## Project structure
+
+```
+jobbot/
+  run.py            pipeline for hh.ru
+  candidates.py     shared step for Habr, GetMatch, Telegram
+  filters.py        hard filter, priority, salary rules
+  llm.py            screening, letters, answers, prompt loading
+  store.py          SQLite schema and queries
+  notify.py         Telegram messages, contact placeholders
+  listener.py       buttons and commands (long polling)
+  alerts.py         failure alerts and daily heartbeat
+  hh.py habr.py getmatch.py trudvsem.py tgchannels.py   sources
+  outreach/         discovery, search providers, polite fetching, targets
+prompts/            prompt texts per candidate field
+deploy/             cron wrappers, systemd unit
+docs/               deployment guide, model choice, bot guide
+tools/              one-off scripts: preview, model evaluation, draft rebuild
+```
+
+## Project history
+
+All of it was built in one week.
+
+| Date | What happened |
+|---|---|
+| 2026-10-08 | Repository, README, `.gitignore` |
+| 2026-10-09 | Vacancy pipeline with LLM screening, cron wrapper, alerts and heartbeat, watchers for Habr, GetMatch and Telegram channels, the first buttons, personal-message drafts for channel posts |
+| 2026-10-10 | Questionnaire warnings and answers, in-bot guide, gender-aware drafts, rebuild tool, outcome commands and monthly summary |
+| 2026-10-11 | `/restore`, statistics for a period, channel commands, e-mail as a contact |
+| 2026-10-12 | Direct-outreach subsystem, prompts and field words moved to config, source switches, defence against instructions hidden in vacancy text |
+| 2026-10-13 | E-mail letters for outreach, optional salary floor |
+| 2026-10-14 | Channel posts that link to an already seen vacancy are skipped, warnings only for permanent location and schedule limits, wording fixes in outreach pitches, LF line endings |
+
+## What is not done
+
+- No automated tests yet; checks are done with the preview scripts in `tools/` and by reading the output.
+- Only DeepSeek is wired in; other OpenAI-compatible providers need small changes in `llm.py`.
+- Prompts are in Russian, written for the Russian job market.
