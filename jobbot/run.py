@@ -92,7 +92,7 @@ def main() -> None:
             continue
         if processed >= args.limit:
             break  # leave the rest unseen so the next run picks them up
-        budget = CFG["limits"].get("daily_llm_budget_usd", 0.25)
+        budget = CFG["limits"].get("daily_llm_budget_usd", 0.5)
         if store.spend_last_day(db) >= budget:
             alerts.problem(
                 db, "budget",

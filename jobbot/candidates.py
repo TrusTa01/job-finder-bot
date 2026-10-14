@@ -31,7 +31,7 @@ def handle(db, profile: str, entry: dict, description: str, direct_message: bool
     if original:
         store.save_vacancy(db, entry, "duplicate", desc_hash=desc_hash, reason=f"репост {original}")
         return DROPPED  # the same text already came from another site, before any LLM call
-    if store.spend_last_day(db) >= CFG["limits"].get("daily_llm_budget_usd", 0.25):
+    if store.spend_last_day(db) >= CFG["limits"].get("daily_llm_budget_usd", 0.5):
         return BUDGET
     try:
         decision, usage = llm.screen(profile, entry, description)

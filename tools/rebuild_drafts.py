@@ -66,7 +66,7 @@ def _rebuild_targets(db, profile: str, dry_run: bool) -> tuple[int, int]:
     cfg = conf.cfg()
     done = failed = 0
     for row in rows:
-        if store.spend_last_day(db) >= CFG["limits"].get("daily_llm_budget_usd", 0.25):
+        if store.spend_last_day(db) >= CFG["limits"].get("daily_llm_budget_usd", 0.5):
             print("stopped: daily LLM budget reached")
             break
         variant = cfg["pitch_variants"].get(row["kind"], "contract")
@@ -131,7 +131,7 @@ def main() -> None:
     cache = hh.load_cache()
     done = failed = 0
     for row in rows:
-        if store.spend_last_day(db) >= CFG["limits"].get("daily_llm_budget_usd", 0.25):
+        if store.spend_last_day(db) >= CFG["limits"].get("daily_llm_budget_usd", 0.5):
             print("stopped: daily LLM budget reached")
             break
         try:

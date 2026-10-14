@@ -65,7 +65,7 @@ low_priority_keywords:
   - частичная занятость
 
 limits:
-  daily_llm_budget_usd: 0.25         # stop LLM calls and alert when the last 24 hours cost this much
+  daily_llm_budget_usd: 0.5         # stop LLM calls and alert when the last 24 hours cost this much
   max_applies_per_day: 30
   mode: draft_only                   # draft_only | auto
 

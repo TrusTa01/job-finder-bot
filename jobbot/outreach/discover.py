@@ -183,7 +183,7 @@ def _add_channels(db, page: str, stats: dict) -> None:
 def process(db, limit: int) -> dict:
     """Classify up to `limit` queued pages. Stops early when the daily LLM budget is spent or the model is down."""
     stats = {"triaged": 0, "targets": 0, "sources": 0, "channels": 0, "budget": False}
-    budget = CFG["limits"].get("daily_llm_budget_usd", 0.25)
+    budget = CFG["limits"].get("daily_llm_budget_usd", 0.5)
     deadline = time.time() + PASS_SECONDS
     for row in targets.next_queued(db, limit):
         if time.time() > deadline or web.saturated():

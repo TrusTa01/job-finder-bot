@@ -25,7 +25,7 @@ def work_cards(db, profile: str, send: bool) -> dict:
         targets.mark_returned(db, row["id"], message_id)
         out["returned"] += 1
     room = int(cfg["max_new_per_day"]) - targets.new_cards_today(db)
-    budget = CFG["limits"].get("daily_llm_budget_usd", 0.25)
+    budget = CFG["limits"].get("daily_llm_budget_usd", 0.5)
     for row in db.execute("SELECT * FROM targets WHERE status IN ('new','drafted') ORDER BY id").fetchall():
         if room <= 0:
             break

@@ -202,7 +202,7 @@ def _handle_message(message: dict, chat: str) -> None:
     if str(message["chat"]["id"]) != chat or not card or not question or not (card.get("from") or {}).get("is_bot"):
         return
     db = store.connect()
-    if store.spend_last_day(db) >= CFG["limits"].get("daily_llm_budget_usd", 0.25):
+    if store.spend_last_day(db) >= CFG["limits"].get("daily_llm_budget_usd", 0.5):
         return _reply(message, "Суточный лимит расходов на ИИ исчерпан, ответ будет позже.")
     profile = candidates.load_profile()
     if not profile:
