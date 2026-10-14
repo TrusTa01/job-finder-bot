@@ -8,6 +8,7 @@ import html
 import re
 import time
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 import requests
 
@@ -90,11 +91,33 @@ def _posts(page: str) -> list[dict]:
         when = re.search(r'datetime="([^"]+)"', block)
         if not text or not when:
             continue
+        links = [html.unescape(h) for h in re.findall(r'href="([^"]+)"', text.group(1))]  # the tags are stripped below, the targets would be lost
         plain = re.sub(r"<br\s*/?>", "\n", text.group(1))
         plain = html.unescape(re.sub(r"<[^>]+>", "", plain)).strip()
         plain = plain.split("Мобильный трудоголик")[0].strip()  # channel advert footer mentions Flutter & Dart
-        out.append({"post": m.group(1), "text": plain, "date": when.group(1)})
+        out.append({"post": m.group(1), "text": plain, "date": when.group(1), "links": links})
     return out
+
+
+def linked_vacancy(db, text: str, links: list[str]) -> str | None:
+    """Id of a stored vacancy that the post points to (hh.ru, Habr Career, GetMatch), whatever its status.
+    The post is often a shortened retelling, so its text hash differs from the original's."""
+    for url in [*links, *re.findall(r"https?://\S+", text)]:
+        host = urlparse(url).netloc.lower()
+        m = re.search(r"/vacanc(?:y|ies)/(\d+)", url)
+        if not m:
+            continue
+        if host.endswith("hh.ru"):
+            key = m.group(1)  # hh ids are stored without a prefix
+        elif host.endswith("habr.com"):
+            key = f"habr:{m.group(1)}"
+        elif host.endswith("getmatch.ru"):
+            key = f"getmatch:{m.group(1)}"
+        else:
+            continue
+        if db.execute("SELECT 1 FROM vacancies WHERE id=?", (key,)).fetchone():
+            return key
+    return None
 
 
 def _relevant(text: str) -> bool:
@@ -129,6 +152,11 @@ def check(db, send: bool = True) -> int:
             if key in known or not _fresh(p["date"]) or not _relevant(p["text"]):
                 continue
             lines = [ln.strip() for ln in p["text"].splitlines() if ln.strip() and not ln.strip().startswith("#")]
+            original = linked_vacancy(db, p["text"], p["links"])
+            if original:
+                store.save_vacancy(db, {"id": key, "published_at": p["date"], "name": lines[0][:100] if lines else "", "employer": {"name": channel},
+                                        "alternate_url": f"https://t.me/{p['post']}"}, "duplicate", reason=f"репост {original}")
+                continue  # already seen on the original site, before any LLM call
             entry = {
                 "id": key, "published_at": p["date"], "name": lines[0][:100] if lines else "", "employer": {"name": channel},
                 "area": {"name": ""}, "experience": {"name": ""}, "alternate_url": f"https://t.me/{p['post']}",
